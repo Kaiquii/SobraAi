@@ -1,0 +1,46 @@
+# Backups completos dos repositórios e relatório privado da migração
+/.local-migration/
+
+# Credenciais locais preservadas no disco
+.env
+.env.*
+!.env.example
+local.properties
+Local.xcconfig
+*.pem
+*.key
+*.ppk
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.p8
+*.mobileprovision
+*-service-account*.json
+*play-integrity*.json
+
+# Dependências, caches e artefatos locais
+node_modules/
+.next/
+.vercel/
+.gradle/
+.kotlin/
+.gocache/
+.codex-go-cache/
+.artifacts/
+.idea/
+build/
+DerivedData/
+xcuserdata/
+*.tsbuildinfo
+*.log
+*.apk
+*.aab
+*.ipa
+*.xcarchive/
+*.dSYM/
+.DS_Store
+Thumbs.db
+
+# O compose local contém credenciais; usar o modelo sanitizado em novos clones
+/backend/docker-compose.yml

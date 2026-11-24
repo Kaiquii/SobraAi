@@ -1,0 +1,761 @@
+package assistant
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+	"unicode"
+)
+
+const openRouterRequestBudget = 45 * time.Second
+const openRouterFallbackStartWindow = 8 * time.Second
+const openRouterFallbackMinRemaining = 10 * time.Second
+const assistantIntentMaxOutputTokens = 2048
+
+var errRouterFallbackWindowClosed = errors.New("assistant fallback start window closed")
+
+// OpenRouterError deliberately contains no upstream message, request, or token.
+// Providers can include submitted content in errors; never return or log it.
+type OpenRouterError struct {
+	Code              string
+	RetryAfterSeconds int
+	StatusCode        int
+	Global            bool
+}
+
+func (e OpenRouterError) Error() string { return e.Code }
+
+func openRouterErrorInfo(err error) (string, int, bool) {
+	var upstream OpenRouterError
+	if errors.As(err, &upstream) {
+		return upstream.Code, upstream.RetryAfterSeconds, true
+	}
+	return "", 0, false
+}
+
+type openRouterClient struct {
+	ctx        context.Context
+	apiKey     string
+	account    string
+	models     []AssistantModel
+	httpClient *http.Client
+	usedModel  string
+	automatic  bool
+}
+
+type openRouterMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type openRouterRequest struct {
+	Model               string              `json:"model"`
+	Messages            []openRouterMessage `json:"messages"`
+	Temperature         *float64            `json:"temperature,omitempty"`
+	MaxTokens           int                 `json:"max_tokens,omitempty"`
+	MaxCompletionTokens int                 `json:"max_completion_tokens,omitempty"`
+	ResponseFormat      map[string]any      `json:"response_format,omitempty"`
+	Reasoning           map[string]bool     `json:"reasoning,omitempty"`
+	Provider            map[string]any      `json:"provider"`
+}
+
+type openRouterResponse struct {
+	Usage *struct {
+		PromptTokens     int64 `json:"prompt_tokens"`
+		CompletionTokens int64 `json:"completion_tokens"`
+		TotalTokens      int64 `json:"total_tokens"`
+	} `json:"usage"`
+	Model   string `json:"model"`
+	Choices []struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
+	Error *struct {
+		Code     int            `json:"code"`
+		Message  string         `json:"message"`
+		Metadata map[string]any `json:"metadata"`
+	} `json:"error"`
+}
+
+// Diagnostics are a closed enum: provider text, returned model IDs and parser
+// errors can contain private data and must never become log fields.
+type routerInvalidResponseReason uint8
+
+const (
+	routerResponseDecodeFailed routerInvalidResponseReason = iota
+	routerResponseMissingChoices
+	routerResponseTruncated
+	routerResponseEmptyContent
+	routerResponseModelMismatch
+	routerIntentJSONInvalid
+	routerIntentUnsupported
+	routerIntentContentFiltered
+	routerIntentProviderError
+	routerIntentToolCalls
+	routerIntentConflictingAction
+	routerIntentActionNotRequested
+)
+
+func (reason routerInvalidResponseReason) String() string {
+	switch reason {
+	case routerResponseDecodeFailed:
+		return "response_decode_failed"
+	case routerResponseMissingChoices:
+		return "missing_choices"
+	case routerResponseTruncated:
+		return "output_truncated"
+	case routerResponseEmptyContent:
+		return "empty_content"
+	case routerResponseModelMismatch:
+		return "model_mismatch"
+	case routerIntentJSONInvalid:
+		return "intent_json_invalid"
+	case routerIntentUnsupported:
+		return "intent_missing_or_unsupported"
+	case routerIntentContentFiltered:
+		return "intent_content_filtered"
+	case routerIntentProviderError:
+		return "intent_provider_error"
+	case routerIntentToolCalls:
+		return "intent_tool_calls"
+	case routerIntentConflictingAction:
+		return "intent_conflicting_action"
+	case routerIntentActionNotRequested:
+		return "intent_action_not_requested"
+	default:
+		return "invalid_response"
+	}
+}
+
+func invalidRouterResponse(stage string, reason routerInvalidResponseReason) (string, bool, error) {
+	log.Printf("OpenRouter invalid_response stage=%s reason=%s", safeRouterStage(stage), reason.String())
+	return "", true, OpenRouterError{Code: "assistant_invalid_response", StatusCode: http.StatusBadGateway, RetryAfterSeconds: 15}
+}
+
+var openRouterCooldowns = struct {
+	sync.Mutex
+	until map[string]time.Time
+}{until: make(map[string]time.Time)}
+
+func newAssistantGeneratorForModel(ctx context.Context, modelID string) (textGenerator, error) {
+	modelID = strings.TrimSpace(modelID)
+	key := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
+	if key == "" {
+		return nil, OpenRouterError{Code: "assistant_not_configured", StatusCode: http.StatusServiceUnavailable}
+	}
+	models, err := listFreeAssistantModels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Empty means server-owned automatic routing. Explicit legacy selections
+	// are prioritized only while present in the verified free catalog; the HTTP
+	// handler validates request-supplied IDs before reaching this constructor.
+	models = orderedAssistantModels(models, modelID)
+	hash := sha256.Sum256([]byte(key))
+	return &openRouterClient{
+		ctx: ctx, apiKey: key, account: hex.EncodeToString(hash[:]), models: models,
+		httpClient: &http.Client{Timeout: openRouterRequestBudget}, automatic: modelID == "",
+	}, nil
+}
+
+func (client *openRouterClient) modelUsed() string { return client.usedModel }
+
+func orderedAssistantModels(models []AssistantModel, selected string) []AssistantModel {
+	ordered := make([]AssistantModel, 0, len(models))
+	seen := make(map[string]bool, len(models))
+	appendModel := func(model AssistantModel) {
+		if !seen[model.ID] {
+			ordered = append(ordered, model)
+			seen[model.ID] = true
+		}
+	}
+	for _, model := range models {
+		if model.ID == selected {
+			appendModel(model)
+		}
+	}
+	for _, model := range models {
+		if model.Recommended {
+			appendModel(model)
+		}
+	}
+	for _, model := range models {
+		appendModel(model)
+	}
+	return ordered
+}
+
+func (client *openRouterClient) generateText(request GeminiRequest) (string, error) {
+	if assistantMessageBudgetExhausted(client.ctx) {
+		return "", OpenRouterError{Code: "assistant_message_limit", StatusCode: http.StatusTooManyRequests}
+	}
+	// Keep the caller's order, but never submit the same model twice, even when
+	// a catalog or manually constructed client contains duplicate IDs.
+	models := make([]AssistantModel, 0, len(client.models))
+	seen := make(map[string]bool, len(client.models))
+	for _, model := range client.models {
+		if model.ID != "" && !seen[model.ID] {
+			models = append(models, model)
+			seen[model.ID] = true
+		}
+	}
+	// One generation owns the whole distinct pool. A second client/stage cannot
+	// spend unused candidates after success or failure.
+	if !beginAssistantGeneration(client.ctx, len(models)) {
+		return "", OpenRouterError{Code: "assistant_message_limit", StatusCode: http.StatusTooManyRequests}
+	}
+	started := time.Now()
+	ctx, cancel := context.WithTimeout(client.ctx, openRouterRequestBudget)
+	defer cancel()
+	if retry := routerCooldownRemaining(client.account); retry > 0 {
+		return "", OpenRouterError{Code: "assistant_quota_exceeded", StatusCode: http.StatusTooManyRequests, RetryAfterSeconds: retry, Global: true}
+	}
+	lastError := OpenRouterError{Code: "assistant_models_unavailable", StatusCode: http.StatusServiceUnavailable, RetryAfterSeconds: 30}
+	attempts := 0
+	if client.automatic {
+		preferred := openRouterAutoRouting.preferred(client.account, models, time.Now())
+		if preferred != "" && routerCooldownRemaining(client.account+":"+preferred) > 0 {
+			openRouterAutoRouting.forget(client.account, preferred)
+			preferred = ""
+		}
+		models = orderedAssistantModels(models, preferred)
+	}
+	for _, model := range models {
+		if ctx.Err() != nil {
+			interrupted, _ := routerRequestInterruption(ctx, ctx.Err(), request.DebugStage)
+			return "", interrupted
+		}
+		if retry := routerCooldownRemaining(client.account); retry > 0 {
+			return "", OpenRouterError{Code: "assistant_quota_exceeded", StatusCode: http.StatusTooManyRequests, RetryAfterSeconds: retry, Global: true}
+		}
+		cooldownKey := client.account + ":" + model.ID
+		if routerCooldownRemaining(cooldownKey) > 0 {
+			continue
+		}
+		var fallbackBefore time.Time
+		if attempts > 0 {
+			fallbackBefore = started.Add(openRouterFallbackStartWindow)
+		}
+		text, attempted, err := client.generateWithModel(ctx, model, request, fallbackBefore)
+		if attempted {
+			attempts++
+		}
+		if errors.Is(err, errRouterFallbackWindowClosed) {
+			break
+		}
+		if err == nil {
+			if client.automatic {
+				openRouterAutoRouting.remember(client.account, client.usedModel, time.Now())
+			}
+			return text, nil
+		}
+		var typed OpenRouterError
+		if !errors.As(err, &typed) {
+			return "", OpenRouterError{Code: "assistant_unavailable", StatusCode: http.StatusServiceUnavailable}
+		}
+		lastError = typed
+		if typed.Global {
+			if typed.RetryAfterSeconds > 0 {
+				setRouterCooldown(client.account, typed.RetryAfterSeconds)
+			}
+			return "", typed
+		}
+		if typed.Code == "assistant_request_cancelled" || typed.Code == "assistant_request_timeout" || typed.Code == "assistant_invalid_request" ||
+			typed.Code == "assistant_user_limit" || typed.Code == "assistant_configuration_error" || typed.Code == "assistant_message_limit" {
+			return "", typed
+		}
+		openRouterAutoRouting.forget(client.account, model.ID)
+		if attempted {
+			pause := 60
+			if typed.StatusCode == http.StatusTooManyRequests {
+				pause = 15 * 60
+				// With no alternative, a fifteen-minute rotation penalty only
+				// locks everyone out longer than the provider requested. Still
+				// honor Retry-After and never retry inside the same message.
+				if len(models) == 1 {
+					pause = 30
+				}
+			}
+			setRouterCooldown(cooldownKey, max(typed.RetryAfterSeconds, pause))
+			lastError.RetryAfterSeconds = routerCooldownRemaining(cooldownKey)
+		}
+		// Do not buy another generated answer just to repair rejected content.
+		// The chat fallback is for unavailable providers, not semantic retries.
+		if typed.Code == "assistant_invalid_response" && client.ctx.Value(assistantMessageBudgetKey{}) != nil {
+			return "", lastError
+		}
+	}
+	if len(models) > 0 {
+		// The response controls when a NEW message may use any model, not
+		// when the last failed model may be retried. Include candidates not
+		// visited because the fallback start window or allowance ended.
+		lastError.RetryAfterSeconds = modelPoolCooldownSeconds(client.account, models)
+	}
+	return "", lastError
+}
+
+func modelPoolCooldownSeconds(account string, models []AssistantModel) int {
+	earliest := 0
+	for _, model := range models {
+		retry := routerCooldownRemaining(account + ":" + model.ID)
+		if retry == 0 {
+			return 0
+		}
+		if earliest == 0 || retry < earliest {
+			earliest = retry
+		}
+	}
+	return earliest
+}
+
+// This bounds when another provider may be started, not the response time of
+// an attempt already in flight. All attempts share the original 45s deadline.
+func routerFallbackCanStart(ctx context.Context, before, now time.Time) bool {
+	if before.IsZero() {
+		return true
+	}
+	if !now.Before(before) {
+		return false
+	}
+	deadline, ok := ctx.Deadline()
+	return !ok || deadline.Sub(now) >= openRouterFallbackMinRemaining
+}
+
+func (client *openRouterClient) generateWithModel(ctx context.Context, model AssistantModel, req GeminiRequest, fallbackBefore time.Time) (string, bool, error) {
+	payload, err := routerPayload(model, req)
+	if err != nil {
+		return "", false, err
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", false, OpenRouterError{Code: "assistant_invalid_request", StatusCode: http.StatusBadRequest}
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, openRouterBaseURL+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return "", false, OpenRouterError{Code: "assistant_invalid_request", StatusCode: http.StatusBadRequest}
+	}
+	request.Header.Set("Authorization", "Bearer "+client.apiKey)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-OpenRouter-Title", "SobraAi")
+	if ctx.Err() != nil {
+		interrupted, _ := routerRequestInterruption(ctx, ctx.Err(), req.DebugStage)
+		return "", false, interrupted
+	}
+	// Another in-flight request can discover an account-wide limit after this
+	// generation started. Recheck at the actual attempt boundary so its fallback
+	// neither spends another user's allowance nor sends another provider call.
+	if retry := routerCooldownRemaining(client.account); retry > 0 {
+		return "", false, OpenRouterError{Code: "assistant_quota_exceeded", StatusCode: http.StatusTooManyRequests, RetryAfterSeconds: retry, Global: true}
+	}
+	// Check immediately before reserving/sending: serializing the payload must
+	// not let a late fallback consume quota or quarantine an uncalled model.
+	if !routerFallbackCanStart(ctx, fallbackBefore, time.Now()) {
+		return "", false, errRouterFallbackWindowClosed
+	}
+	if err := reserveAssistantCall(ctx); err != nil {
+		return "", false, err
+	}
+	start := time.Now()
+	response, err := client.httpClient.Do(request)
+	if err != nil {
+		if interrupted, ok := routerRequestInterruption(ctx, err, req.DebugStage); ok {
+			return "", true, interrupted
+		}
+		return "", true, OpenRouterError{Code: "assistant_unavailable", StatusCode: http.StatusServiceUnavailable, RetryAfterSeconds: 15}
+	}
+	defer response.Body.Close()
+	var result openRouterResponse
+	decodeErr := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&result)
+	log.Printf("OpenRouter stage=%s model=%s status=%d duration=%s", safeRouterStage(req.DebugStage), model.ID, response.StatusCode, time.Since(start).Round(time.Millisecond))
+	if decodeErr == nil && result.Usage != nil {
+		log.Printf("OpenRouter usage prompt_tokens=%d completion_tokens=%d total_tokens=%d", result.Usage.PromptTokens, result.Usage.CompletionTokens, result.Usage.TotalTokens)
+	}
+	if response.StatusCode >= 400 {
+		failure := classifyRouterError(response, result)
+		log.Printf("OpenRouter rejected code=%s status=%d global=%t retry_after=%d", failure.Code, failure.StatusCode, failure.Global, failure.RetryAfterSeconds)
+		return "", true, failure
+	}
+	if decodeErr != nil {
+		if interrupted, ok := routerRequestInterruption(ctx, decodeErr, req.DebugStage); ok {
+			return "", true, interrupted
+		}
+		return invalidRouterResponse(req.DebugStage, routerResponseDecodeFailed)
+	}
+	if result.Error != nil {
+		return "", true, classifyRouterError(response, result)
+	}
+	if len(result.Choices) == 0 {
+		return invalidRouterResponse(req.DebugStage, routerResponseMissingChoices)
+	}
+	if result.Choices[0].FinishReason == "length" {
+		return invalidRouterResponse(req.DebugStage, routerResponseTruncated)
+	}
+	if req.DebugStage == "assistant_intent" {
+		switch result.Choices[0].FinishReason {
+		case "content_filter":
+			return invalidRouterResponse(req.DebugStage, routerIntentContentFiltered)
+		case "error":
+			return invalidRouterResponse(req.DebugStage, routerIntentProviderError)
+		case "tool_calls":
+			return invalidRouterResponse(req.DebugStage, routerIntentToolCalls)
+		}
+	}
+	text := strings.TrimSpace(result.Choices[0].Message.Content)
+	if text == "" {
+		return invalidRouterResponse(req.DebugStage, routerResponseEmptyContent)
+	}
+	if !client.responseModelAllowed(model.ID, result.Model) {
+		return invalidRouterResponse(req.DebugStage, routerResponseModelMismatch)
+	}
+	if req.DebugStage == "assistant_intent" {
+		// JSON parsing happens before success so even models without native JSON
+		// formatting can fall back safely without executing an invalid intent.
+		var envelope map[string]json.RawMessage
+		_ = json.Unmarshal([]byte(cleanJSONText(text)), &envelope)
+		if payload.ResponseFormat["type"] == "json_schema" || envelope["action"] != nil {
+			normalized, err := normalizeAssistantSchemaResponse(cleanJSONText(text))
+			if err != nil {
+				return invalidRouterResponse(req.DebugStage, routerIntentJSONInvalid)
+			}
+			text = normalized
+		}
+		intent, err := parseFinancialIntent(cleanJSONText(text))
+		if err != nil || strings.TrimSpace(intent.Intent) == "" {
+			var object map[string]any
+			if json.Unmarshal([]byte(cleanJSONText(text)), &object) != nil || object == nil {
+				return invalidRouterResponse(req.DebugStage, routerIntentJSONInvalid)
+			}
+			return invalidRouterResponse(req.DebugStage, routerIntentUnsupported)
+		}
+		if intent.Intent == "financial_query" && payload.ResponseFormat["type"] != "json_schema" {
+			// Optional query controls have the same meaning with every response
+			// format. Reuse the native adapter only for this read-only action;
+			// legacy expense masks and conflicting creation plans remain intact.
+			normalized, err := normalizeAssistantSchemaResponse(cleanJSONText(text))
+			if err != nil {
+				return invalidRouterResponse(req.DebugStage, routerIntentJSONInvalid)
+			}
+			text = normalized
+		}
+		// A read plan cannot also be an expense mutation. Reject the conflict
+		// before publishing any model output or marking this model successful.
+		if intent.Intent == "create_expense" && intent.provided["query"] != nil {
+			return invalidRouterResponse(req.DebugStage, routerIntentConflictingAction)
+		}
+		if intent.Intent == "create_expense" && routerLastUserRequestsRead(req) {
+			return invalidRouterResponse(req.DebugStage, routerIntentActionNotRequested)
+		}
+	}
+	client.usedModel = model.ID
+	if result.Model != "" {
+		client.usedModel = result.Model
+	}
+	return text, true, nil
+}
+
+// Client timeouts cover response-body reads as well as waiting for headers.
+// Log only a fixed interruption reason; transport errors may contain request
+// URLs, provider details or submitted content and must never be logged raw.
+func routerRequestInterruption(ctx context.Context, err error, stage string) (OpenRouterError, bool) {
+	contextError := ctx.Err()
+	if errors.Is(contextError, context.Canceled) || (contextError == nil && errors.Is(err, context.Canceled)) {
+		log.Printf("OpenRouter request_interrupted stage=%s reason=request_cancelled", safeRouterStage(stage))
+		return OpenRouterError{Code: "assistant_request_cancelled", StatusCode: http.StatusRequestTimeout}, true
+	}
+	var networkError net.Error
+	if errors.Is(contextError, context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) ||
+		(errors.As(err, &networkError) && networkError.Timeout()) {
+		log.Printf("OpenRouter request_interrupted stage=%s reason=request_timeout", safeRouterStage(stage))
+		return OpenRouterError{Code: "assistant_request_timeout", StatusCode: http.StatusGatewayTimeout, RetryAfterSeconds: 15}, true
+	}
+	return OpenRouterError{}, false
+}
+
+// An explicit question must not become an expense draft merely because the
+// model labelled it as a creation. This guard only rejects; it never guesses a
+// different intent or extracts financial values from the user's message.
+func routerLastUserRequestsRead(req GeminiRequest) bool {
+	for index := len(req.Contents) - 1; index >= 0; index-- {
+		role := strings.TrimSpace(req.Contents[index].Role)
+		if role != "user" && role != "" {
+			continue
+		}
+		text := strings.TrimSpace(routerContent(req.Contents[index]))
+		word, rest := routerLeadingWord(text)
+		if strings.EqualFold(word, "e") {
+			trimmed := strings.TrimLeftFunc(rest, unicode.IsSpace)
+			if trimmed == rest {
+				return false
+			}
+			word, _ = routerLeadingWord(trimmed)
+		}
+		switch strings.ToLower(word) {
+		case "qual", "quanto", "quais":
+			return true
+		default:
+			return false
+		}
+	}
+	return false
+}
+
+func routerLeadingWord(text string) (string, string) {
+	end := len(text)
+	for index, char := range text {
+		if !unicode.IsLetter(char) && !unicode.IsDigit(char) && char != '_' {
+			end = index
+			break
+		}
+	}
+	return text[:end], text[end:]
+}
+
+func (client *openRouterClient) responseModelAllowed(requested, actual string) bool {
+	if actual == "" || actual == requested {
+		return true
+	}
+	if requested != "openrouter/free" {
+		return false
+	}
+	for _, model := range client.models {
+		if model.ID == actual {
+			return true
+		}
+	}
+	return false
+}
+
+func routerPayload(model AssistantModel, req GeminiRequest) (openRouterRequest, error) {
+	payload := openRouterRequest{
+		Model: model.ID, Messages: routerMessages(req),
+		Provider: map[string]any{
+			"allow_fallbacks": true, "require_parameters": true, "data_collection": "deny",
+			"max_price": map[string]int{"prompt": 0, "completion": 0, "request": 0},
+		},
+	}
+	if len(model.privateProviders) > 0 {
+		payload.Provider["only"] = append([]string(nil), model.privateProviders...)
+		payload.Provider["zdr"] = true
+	}
+	if model.SupportsTemperature {
+		temperature := routerTemperature(req.GenerationConfig)
+		payload.Temperature = &temperature
+	}
+	if req.DebugStage == "assistant_intent" {
+		if model.SupportsStructuredOutputs && model.ID != legacyJSONAssistantModelID {
+			payload.ResponseFormat = assistantResponseFormat(req.CategoryNames)
+		} else if model.SupportsResponseFormat {
+			// Qualification on 2026-11-01 reproduced wrong action selection with
+			// this model's native anyOf decoder (including cancel for a purchase).
+			// JSON object preserves understanding; Go still validates every plan.
+			payload.ResponseFormat = map[string]any{"type": "json_object"}
+		}
+	}
+	if req.DebugStage == "assistant_intent" && model.CanDisableReasoning {
+		// Interpretation has a shared output budget. Disable optional
+		// reasoning, rather than merely hiding it and consuming the same budget.
+		enabled, _ := req.GenerationConfig["enable_reasoning"].(bool)
+		payload.Reasoning = map[string]bool{"enabled": enabled}
+	}
+	if req.DebugStage == "assistant_intent" && !model.SupportsResponseFormat && !model.SupportsStructuredOutputs {
+		const instruction = "Responda exclusivamente com um objeto JSON valido com a intencao e os campos pedidos, sem cercas de codigo nem texto fora do objeto. A string reply pode conter Markdown simples, com quebras de linha escapadas como \\n."
+		if len(payload.Messages) > 0 && payload.Messages[0].Role == "system" {
+			payload.Messages[0].Content += "\n" + instruction
+		} else {
+			payload.Messages = append([]openRouterMessage{{Role: "system", Content: instruction}}, payload.Messages...)
+		}
+	}
+	// Bytes are a conservative token bound, including multilingual input. Keep
+	// all system instructions and the current message; discard only older turns.
+	// A model too small for those mandatory messages safely falls back instead.
+	if model.ContextLength <= 512 {
+		return openRouterRequest{}, OpenRouterError{Code: "assistant_model_context_exceeded", StatusCode: http.StatusRequestEntityTooLarge}
+	}
+	outputLimit := 2048
+	if req.DebugStage == "assistant_intent" {
+		outputLimit = assistantIntentMaxOutputTokens
+	}
+	outputBudget := min(outputLimit, (model.ContextLength-256)/4)
+	inputBudget := model.ContextLength - outputBudget - 256
+	formatSize := 0
+	if payload.ResponseFormat != nil {
+		encoded, err := json.Marshal(payload.ResponseFormat)
+		if err != nil {
+			return openRouterRequest{}, OpenRouterError{Code: "assistant_invalid_request", StatusCode: http.StatusBadRequest}
+		}
+		formatSize = len(encoded)
+	}
+	messageSize := func(messages []openRouterMessage) int {
+		total := formatSize
+		for _, message := range messages {
+			total += len(message.Content) + 16
+		}
+		return total
+	}
+	for messageSize(payload.Messages) > inputBudget {
+		oldest := 0
+		for oldest < len(payload.Messages) && payload.Messages[oldest].Role == "system" {
+			oldest++
+		}
+		if oldest >= len(payload.Messages)-1 {
+			return openRouterRequest{}, OpenRouterError{Code: "assistant_model_context_exceeded", StatusCode: http.StatusRequestEntityTooLarge}
+		}
+		payload.Messages = append(payload.Messages[:oldest], payload.Messages[oldest+1:]...)
+	}
+	if model.SupportsMaxTokens {
+		payload.MaxTokens = outputBudget
+	} else if model.SupportsMaxCompletionTokens {
+		payload.MaxCompletionTokens = outputBudget
+	}
+	return payload, nil
+}
+
+func classifyRouterError(response *http.Response, result openRouterResponse) OpenRouterError {
+	status := response.StatusCode
+	if result.Error != nil && result.Error.Code >= 400 {
+		status = result.Error.Code
+	}
+	retry := routerRetryAfter(response.Header.Get("Retry-After"))
+	switch status {
+	case http.StatusPaymentRequired:
+		return OpenRouterError{Code: "assistant_quota_exceeded", StatusCode: status, RetryAfterSeconds: max(retry, 60), Global: true}
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return OpenRouterError{Code: "assistant_configuration_error", StatusCode: status, RetryAfterSeconds: max(retry, 30), Global: true}
+	case http.StatusTooManyRequests:
+		global := response.Header.Get("X-RateLimit-Limit") != "" || response.Header.Get("X-RateLimit-Reset") != ""
+		if result.Error != nil {
+			metadata := result.Error.Metadata
+			provider, _ := metadata["provider_name"].(string)
+			source, _ := metadata["limit_source"].(string)
+			typeName, _ := metadata["error_type"].(string)
+			message := strings.ToLower(result.Error.Message)
+			// Provider limits can carry rate-limit headers too. Headers alone
+			// must not turn an explicitly identified provider into an account ban.
+			if provider != "" {
+				global = false
+			}
+			global = global || strings.HasPrefix(source, "openrouter") ||
+				(provider == "" && typeName == "rate_limit_exceeded") ||
+				strings.Contains(message, "per-day") || strings.Contains(message, "per day") ||
+				strings.Contains(message, "daily limit") || strings.Contains(message, "account limit")
+		}
+		if global {
+			retry = max(retry, routerRateLimitReset(response.Header.Get("X-RateLimit-Reset")))
+		}
+		return OpenRouterError{Code: "assistant_quota_exceeded", StatusCode: status, RetryAfterSeconds: max(retry, 30), Global: global}
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
+		return OpenRouterError{Code: "assistant_invalid_request", StatusCode: status}
+	case http.StatusNotFound:
+		// A request denied by the data policy is model-specific: rotate while
+		// keeping deny. Never spend the next message discovering the same
+		// incompatible route again, and never enable collection to recover.
+		if result.Error != nil && strings.Contains(strings.ToLower(result.Error.Message), "data policy") {
+			return OpenRouterError{Code: "assistant_models_unavailable", StatusCode: status, RetryAfterSeconds: max(retry, 300)}
+		}
+		return OpenRouterError{Code: "assistant_models_unavailable", StatusCode: status, RetryAfterSeconds: max(retry, 60)}
+	default:
+		return OpenRouterError{Code: "assistant_models_unavailable", StatusCode: status, RetryAfterSeconds: max(retry, 15)}
+	}
+}
+
+func routerMessages(req GeminiRequest) []openRouterMessage {
+	result := make([]openRouterMessage, 0, len(req.Contents)+1)
+	if req.SystemInstruction != nil {
+		result = append(result, openRouterMessage{Role: "system", Content: routerContent(*req.SystemInstruction)})
+	}
+	for _, content := range req.Contents {
+		role := "user"
+		if content.Role == "model" || content.Role == "assistant" {
+			role = "assistant"
+		}
+		result = append(result, openRouterMessage{Role: role, Content: routerContent(content)})
+	}
+	return result
+}
+
+func routerContent(content GeminiContent) string {
+	parts := make([]string, 0, len(content.Parts))
+	for _, part := range content.Parts {
+		if strings.TrimSpace(part.Text) != "" {
+			parts = append(parts, part.Text)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func routerTemperature(config map[string]any) float64 {
+	switch value := config["temperature"].(type) {
+	case float64:
+		return value
+	case int:
+		return float64(value)
+	default:
+		return 0.2
+	}
+}
+
+func safeRouterStage(stage string) string {
+	switch stage {
+	case "assistant_intent", "assistant_chat", "assistant_summarize_tool":
+		return stage
+	default:
+		return "assistant"
+	}
+}
+
+func routerRetryAfter(value string) int {
+	seconds, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		if date, dateErr := http.ParseTime(value); dateErr == nil {
+			seconds = int(time.Until(date).Seconds()) + 1
+		}
+	}
+	return min(max(seconds, 0), 86400)
+}
+
+func routerRateLimitReset(value string) int {
+	unix, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil || unix <= 0 {
+		return routerRetryAfter(value)
+	}
+	// Gateways expose reset instants in Unix seconds or milliseconds.
+	if unix > 1e12 {
+		unix /= 1000
+	}
+	seconds := int(time.Until(time.Unix(unix, 0)).Seconds()) + 1
+	return min(max(seconds, 0), 86400)
+}
+
+func routerCooldownRemaining(key string) int {
+	openRouterCooldowns.Lock()
+	defer openRouterCooldowns.Unlock()
+	until := openRouterCooldowns.until[key]
+	if !time.Now().Before(until) {
+		delete(openRouterCooldowns.until, key)
+		return 0
+	}
+	return int(time.Until(until).Seconds()) + 1
+}
+
+func setRouterCooldown(key string, seconds int) {
+	openRouterCooldowns.Lock()
+	defer openRouterCooldowns.Unlock()
+	until := time.Now().Add(time.Duration(min(seconds, 86400)) * time.Second)
+	if until.After(openRouterCooldowns.until[key]) {
+		openRouterCooldowns.until[key] = until
+	}
+}

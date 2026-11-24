@@ -1,0 +1,36 @@
+[CmdletBinding()]
+param(
+  [ValidateSet('doctor','setup','build')]
+  [string]$Mode = 'build',
+  [switch]$Framework
+)
+$ErrorActionPreference = 'Stop'
+$env:XCROSS_CONFIG = Join-Path $PSScriptRoot 'config.yaml'
+$env:XCROSS_KONAN_DATA_DIR = 'C:\Users\kaiqu\AppData\Local\SobraAiTools\konan'
+$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+$env:PATH = 'C:\Program Files\LLVM\bin;C:\Users\kaiqu\AppData\Local\Programs\Swift\Toolchains\6.4.3+Asserts\usr\bin;' + $env:JAVA_HOME + '\bin;' + $env:PATH
+$projectRoot = 'C:\Users\kaiqu\Documents\SobraAi Unificado\mobile'
+Set-Location -LiteralPath $projectRoot
+$arguments = @('compose', $Mode)
+if ($Framework -and $Mode -eq 'build') { $arguments += '--framework' }
+# xcross 2.1.3 reads this conventional path instead of INFOPLIST_FILE.
+# Stage the canonical plist only during app assembly; never overwrite a file.
+$stagedPlist = Join-Path $projectRoot 'iosApp\Info.plist'
+$createdPlist = $false
+$code = 1
+try {
+  if ($Mode -eq 'build' -and !$Framework -and !(Test-Path -LiteralPath $stagedPlist)) {
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'iosApp\SobraAi\Info.plist') -Destination $stagedPlist
+    $createdPlist = $true
+  }
+  & (Join-Path $PSScriptRoot 'bin\xcross.exe') @arguments
+  $code = $LASTEXITCODE
+} finally {
+  if ($createdPlist) {
+    $resolved = [IO.Path]::GetFullPath($stagedPlist)
+    $expected = [IO.Path]::GetFullPath((Join-Path $projectRoot 'iosApp\Info.plist'))
+    if ($resolved -ne $expected) { throw 'Unexpected staging path' }
+    Remove-Item -LiteralPath $resolved
+  }
+}
+exit $code

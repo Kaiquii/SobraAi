@@ -1,0 +1,91 @@
+# Comandos Canonicos
+
+Execute os comandos a partir da raiz do repositorio.
+
+## Git: Main Obrigatoria
+
+Nao criar novas branches, inclusive temporarias, auxiliares ou `codex/`, em
+tarefas, harness ou subagentes. Todo commit/push autorizado deve ocorrer na
+`main`; o harness nao executa esses comandos automaticamente. Antes de alterar
+arquivos e antes de commit/push, confira:
+
+```powershell
+git branch --show-current
+```
+
+O resultado deve ser `main`. Outra branch ou detached HEAD interrompe mutacoes;
+preserve o checkout e informe a divergencia, sem criar/trocar branches, descartar
+ou stashear trabalho para contornar a regra. Nao remover branches existentes
+sem pedido do usuario. Consulte AGENTS.md e docs/rules.md.
+
+## Harness Completo
+
+Windows PowerShell:
+
+```powershell
+.\scripts\test.ps1
+```
+
+Linux e macOS:
+
+```bash
+sh ./scripts/test.sh
+```
+
+O harness completo valida formatacao, executa `go vet`, roda todos os testes sem cache e gera:
+
+- `.artifacts/test/coverage.out`: perfil de cobertura.
+- `.artifacts/test/coverage.txt`: resumo por funcao.
+
+O GitHub Actions esta desativado neste projeto; as validacoes sao executadas localmente.
+Para executar tambem o detector de condicoes de corrida em um ambiente compativel:
+
+```bash
+go test -race ./... -count=1 -timeout=3m
+```
+
+## Iteracao Rapida
+
+Windows PowerShell:
+
+```powershell
+.\scripts\test.ps1 -Quick
+```
+
+Linux e macOS:
+
+```bash
+sh ./scripts/test.sh --quick
+```
+
+O modo rapido executa todos os testes sem gerar cobertura nem rodar analise estatica.
+
+Para testar somente um pacote durante a implementacao:
+
+```bash
+go test ./internal/auth -count=1
+```
+
+Para executar um teste especifico:
+
+```bash
+go test ./internal/auth -run '^TestNomeDoTeste$' -count=1
+```
+
+## Build Local
+
+```bash
+go build ./cmd/api
+go build ./cmd/migrate
+```
+
+## Migrations
+
+Estes comandos precisam de `DB_DSN` apontando para um banco explicitamente escolhido:
+
+```bash
+go run ./cmd/migrate status
+go run ./cmd/migrate up
+```
+
+Nunca execute `up` contra producao sem a autorizacao exigida por `docs/rules.md`.

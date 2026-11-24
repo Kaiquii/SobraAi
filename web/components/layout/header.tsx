@@ -1,0 +1,409 @@
+"use client";
+
+import {
+  ChevronDown,
+  Eye,
+  EyeOff,
+  ArrowLeft,
+  Diamond,
+  Home,
+  LogOut,
+  Mail,
+  Menu,
+  MessageCircle,
+  Star,
+  UserRound,
+  Wallet,
+  LoaderCircle,
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import dynamic from "next/dynamic";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+
+import { dashboardNavigation } from "@/components/layout/navigation";
+import { Button } from "@/components/ui/button";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { ProfilePhotoPreviewDialog } from "@/components/ui/profile-photo-preview-dialog";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { useAuthStore } from "@/features/auth/store/useAuthStore";
+import { useFinancialPrivacyStore } from "@/store/useFinancialPrivacyStore";
+import { buildApiAssetUrl } from "@/lib/api";
+import { usePatrimonyStore } from "@/features/patrimony/store/usePatrimonyStore";
+
+const AssistantChatDialog = dynamic(() => import("@/features/assistant/components/AssistantChatView").then((module) => module.AssistantChatDialog));
+
+type HeaderProps = {
+  onOpenSidebar: () => void;
+};
+
+const extraRouteTitles = [
+  { href: "/home", label: "SobraAí" },
+  { href: "/inicio", label: "Visão Mensal" },
+  { href: "/salario", label: "Configurações de Renda" },
+  { href: "/relatorios/compromissos-parcelados", label: "Compromissos Parcelados" },
+  { href: "/perfil/ajuda", label: "Central de Ajuda" },
+  { href: "/perfil/categorias", label: "Categorias" },
+  { href: "/perfil/editar", label: "Editar Perfil" },
+  { href: "/patrimonio", label: "Patrimônio" },
+];
+
+const routeTitles = [...extraRouteTitles, ...dashboardNavigation];
+
+function getCurrentPageTitle(pathname: string) {
+  const match = routeTitles
+    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
+    .sort((first, second) => second.href.length - first.href.length)[0];
+
+  return match?.label ?? "SobraAi";
+}
+
+export function Header({ onOpenSidebar }: HeaderProps) {
+  const valuesHidden = useFinancialPrivacyStore((state) => state.valuesHidden);
+  const patrimonyLoading = usePatrimonyStore((state) => state.loading && state.data !== null);
+  const toggleValues = useFinancialPrivacyStore((state) => state.toggle);
+  const [isAssistantDialogOpen, setIsAssistantDialogOpen] = useState(false);
+  const [isPhotoPreviewOpen, setIsPhotoPreviewOpen] = useState(false);
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const loadProfile = useAuthStore((state) => state.loadProfile);
+  const logout = useAuthStore((state) => state.logout);
+  const user = useAuthStore((state) => state.user);
+  const pathname = usePathname();
+  const router = useRouter();
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const avatarUrl = buildApiAssetUrl(user?.avatar_url, user?.avatar_cache_key);
+  const profileEmail = user?.email;
+  const currentPageTitle = getCurrentPageTitle(pathname);
+  const showFinancialPrivacy = ["/inicio", "/despesas", "/relatorios", "/salario", "/patrimonio"].some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+  const userName = user?.name ?? "Usuário";
+  const userEmail = user?.email ?? "E-mail não informado.";
+  const isAdmin = user?.role === "admin";
+  const isPremium = user?.role === "premium";
+  const userRoleLabel = isAdmin
+    ? "Administrador"
+    : isPremium
+      ? "Premium"
+    : user?.role === "user"
+      ? "Usuário"
+      : user?.role || "Perfil não informado";
+
+  useEffect(() => {
+    if (!profileEmail) {
+      return;
+    }
+
+    void loadProfile().catch(() => {});
+  }, [loadProfile, profileEmail]);
+
+  useEffect(() => {
+    if (!isUserMenuOpen) {
+      return;
+    }
+
+    function handleClickOutside(event: MouseEvent) {
+      if (!userMenuRef.current?.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsUserMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isUserMenuOpen]);
+
+  function handleLogout() {
+    logout();
+    setIsLogoutDialogOpen(false);
+    setIsUserMenuOpen(false);
+    router.replace("/login");
+  }
+
+  const patrimonyMobileHeader = pathname === "/patrimonio" ? <header className="sticky top-0 z-30 bg-slate-100 px-3 pt-[env(safe-area-inset-top)] text-slate-950 dark:bg-slate-950 dark:text-slate-50 sm:hidden">
+    <div className="mx-auto flex min-h-14 max-w-3xl items-center gap-3">
+      <Button aria-label="Voltar" size="iconLg" variant="ghost" onClick={() => router.replace(new URLSearchParams(window.location.search).get("origem") === "perfil" ? "/perfil" : "/inicio")}><ArrowLeft aria-hidden="true" size={24} /></Button>
+      <h1 className="min-w-0 flex-1 text-xl font-bold">Patrimônio</h1>
+      {patrimonyLoading ? <LoaderCircle aria-label="Atualizando patrimônio" size={20} className="shrink-0 animate-spin text-brand" /> : null}
+      <Button aria-label={valuesHidden ? "Mostrar valores" : "Ocultar valores"} aria-pressed={valuesHidden} size="iconLg" variant="ghost" onClick={toggleValues}>{valuesHidden ? <EyeOff aria-hidden="true" size={24} /> : <Eye aria-hidden="true" size={24} />}</Button>
+    </div>
+  </header> : null;
+
+  const profileMobileHeader = pathname === "/perfil" ? (
+    <header className="sticky top-0 z-30 bg-slate-100 pl-4 pr-2 pt-[env(safe-area-inset-top)] text-slate-950 dark:bg-slate-950 dark:text-slate-50 sm:hidden">
+      <div className="flex min-h-16 items-center justify-between gap-3">
+        <h1 className="min-w-0 text-2xl font-bold">Meu perfil</h1>
+        <Button
+          aria-label="Sair da conta"
+          className="shrink-0 enabled:text-red-600 max-sm:rounded-full dark:enabled:text-red-300"
+          onClick={() => setIsLogoutDialogOpen(true)}
+          size="iconLg"
+          variant="ghost"
+        >
+          <LogOut aria-hidden="true" size={24} />
+        </Button>
+      </div>
+    </header>
+  ) : null;
+
+  return (
+    <>
+      {patrimonyMobileHeader}
+      {profileMobileHeader}
+      <header className={`sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-3 py-2 text-slate-950 pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 dark:text-slate-50 sm:px-6 lg:px-8 ${pathname === "/patrimonio" || pathname === "/perfil" ? "max-sm:hidden" : ""}`}>
+        <div className="flex w-full items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <Button
+              aria-label="Abrir menu"
+              className="max-sm:hidden shrink-0 rounded-full border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"
+              onClick={onOpenSidebar}
+              size="iconSm"
+              title="Abrir menu"
+              type="button"
+              variant="secondary"
+            >
+              <Menu aria-hidden="true" size={17} strokeWidth={2.25} />
+            </Button>
+
+            {pathname !== "/home" && pathname !== "/inicio" ? (
+              <Button aria-label="Voltar" variant="ghost" size="icon" className="shrink-0 sm:hidden" onClick={() => router.push(pathname.startsWith("/perfil/") || pathname === "/salario" ? "/perfil" : pathname.startsWith("/relatorios/") ? "/relatorios" : "/inicio")}>
+                <ArrowLeft aria-hidden="true" size={22} />
+              </Button>
+            ) : null}
+
+            <div className="min-w-0">
+              <h1 className="line-clamp-2 text-base font-bold leading-tight text-slate-950 dark:text-slate-50 sm:text-lg">
+                {currentPageTitle}
+              </h1>
+              {currentPageTitle !== "SobraAi" ? (
+                <p className="hidden truncate text-xs text-slate-500 dark:text-slate-400 sm:block">
+                  SobraAí
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {pathname === "/inicio" || pathname === "/home" ? <Link aria-label="Abrir patrimônio" href="/patrimonio?origem=inicio" className="hidden h-10 w-10 items-center justify-center rounded-xl text-brand hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:flex"><Wallet aria-hidden="true" size={24} /></Link> : null}
+            <Button
+              aria-label="Ir para home"
+              className="max-sm:hidden h-11 w-11 shrink-0 rounded-full border-0 bg-transparent shadow-none dark:bg-transparent sm:h-8 sm:w-8"
+              onClick={() => router.push("/home")}
+              size="iconSm"
+              title="Home"
+              type="button"
+              variant="secondary"
+            >
+              <Home aria-hidden="true" size={16} strokeWidth={2.25} />
+            </Button>
+            {showFinancialPrivacy ? <Button
+              aria-label={valuesHidden ? "Mostrar valores" : "Ocultar valores"}
+              title={valuesHidden ? "Mostrar valores" : "Ocultar valores"}
+              aria-pressed={valuesHidden}
+              onClick={toggleValues}
+              size="icon"
+              variant="ghost"
+              className="h-11 w-11 shrink-0 rounded-full sm:h-8 sm:w-8"
+            >
+              {valuesHidden ? <EyeOff aria-hidden="true" size={20} /> : <Eye aria-hidden="true" size={20} />}
+            </Button> : null}
+            <Button
+              aria-label="Abrir assistente com IA"
+              className="h-11 w-11 shrink-0 rounded-full border-0 bg-transparent text-brand shadow-none dark:bg-transparent dark:text-brand sm:h-8 sm:w-8"
+              onClick={() => setIsAssistantDialogOpen(true)}
+              size="iconSm"
+              title="Assistente com IA"
+              type="button"
+              variant="secondary"
+            >
+              <MessageCircle aria-hidden="true" size={16} strokeWidth={2.25} />
+            </Button>
+            <ThemeToggle
+              className="h-11 w-11 shrink-0 rounded-full border-0 bg-transparent p-0 shadow-none dark:bg-transparent sm:h-8 sm:w-8"
+              iconSize={16}
+            />
+            <div className="relative hidden sm:block" ref={userMenuRef}>
+              <button
+                aria-expanded={isUserMenuOpen}
+                aria-haspopup="dialog"
+                className="inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-900 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800 sm:px-3"
+                onClick={() => setIsUserMenuOpen((isOpen) => !isOpen)}
+                type="button"
+              >
+                {avatarUrl ? (
+                  <Image
+                    alt=""
+                    aria-hidden="true"
+                    className="h-5 w-5 rounded-full object-cover"
+                    height={20}
+                    src={avatarUrl}
+                    width={20}
+                  />
+                ) : (
+                  <UserRound aria-hidden="true" size={14} strokeWidth={2.25} />
+                )}
+                <span className="hidden max-w-32 truncate sm:inline">
+                  Olá, {userName}
+                </span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className={isUserMenuOpen ? "rotate-180 transition-transform" : "transition-transform"}
+                  size={14}
+                  strokeWidth={2.25}
+                />
+              </button>
+
+              {isUserMenuOpen ? (
+                <div
+                  aria-label="Informações do usuário"
+                  className="absolute right-0 top-10 z-50 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/30"
+                  role="dialog"
+                >
+                  <div className="grid gap-3 border-b border-slate-200 p-3.5 dark:border-slate-800">
+                    <div className="flex min-w-0 items-center gap-3">
+                      {avatarUrl ? (
+                        <button
+                          aria-label="Visualizar foto de perfil"
+                          className="relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-emerald-100 text-emerald-700 hover:border-emerald-300 hover:ring-2 hover:ring-emerald-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-slate-800 dark:bg-emerald-950/50 dark:text-emerald-300"
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            setIsPhotoPreviewOpen(true);
+                          }}
+                          title="Visualizar foto"
+                          type="button"
+                        >
+                          <Image
+                            alt="Foto de perfil"
+                            className="h-full w-full object-cover"
+                            height={40}
+                            src={avatarUrl}
+                            width={40}
+                          />
+                        </button>
+                      ) : (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-emerald-100 text-emerald-700 dark:border-slate-800 dark:bg-emerald-950/50 dark:text-emerald-300">
+                          <UserRound aria-hidden="true" size={18} strokeWidth={2.25} />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-semibold uppercase text-slate-400 dark:text-slate-500">
+                          Nome
+                        </p>
+                        <p className="mt-0.5 truncate text-sm font-semibold text-slate-950 dark:text-slate-50">
+                          {userName}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <Mail
+                        aria-hidden="true"
+                        className="mt-0.5 shrink-0 text-slate-400 dark:text-slate-500"
+                        size={15}
+                        strokeWidth={2.25}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-semibold uppercase text-slate-400 dark:text-slate-500">
+                          E-mail
+                        </p>
+                        <p className="mt-0.5 truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
+                          {userEmail}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <UserRound
+                        aria-hidden="true"
+                        className="mt-0.5 shrink-0 text-slate-400 dark:text-slate-500"
+                        size={15}
+                        strokeWidth={2.25}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-semibold uppercase text-slate-400 dark:text-slate-500">
+                          Perfil
+                        </p>
+                        <span
+                          className={
+                            isAdmin
+                              ? "mt-0.5 inline-flex max-w-full items-center gap-1 truncate text-sm font-semibold text-amber-600 dark:text-amber-300"
+                              : isPremium
+                                ? "mt-0.5 inline-flex max-w-full items-center gap-1 truncate text-sm font-semibold text-violet-700 dark:text-violet-300"
+                                : "mt-0.5 block truncate text-sm font-semibold text-slate-700 dark:text-slate-200"
+                          }
+                        >
+                          {isAdmin ? (
+                            <Star
+                              aria-hidden="true"
+                              className="shrink-0"
+                              size={14}
+                              strokeWidth={2.4}
+                            />
+                          ) : null}
+                          {isPremium ? (
+                            <Diamond
+                              aria-hidden="true"
+                              className="shrink-0"
+                              size={14}
+                              strokeWidth={2.4}
+                            />
+                          ) : null}
+                          {userRoleLabel}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-200 p-1.5 dark:border-slate-800">
+                    <button
+                      className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setIsLogoutDialogOpen(true);
+                      }}
+                      type="button"
+                    >
+                      <LogOut aria-hidden="true" size={15} strokeWidth={2.25} />
+                      Sair
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <ConfirmationDialog
+        confirmLabel="Sim, sair"
+        description="Você será desconectado da sua conta e precisará fazer login novamente para acessar o painel."
+        isOpen={isLogoutDialogOpen}
+        onClose={() => setIsLogoutDialogOpen(false)}
+        onConfirm={handleLogout}
+        title="Tem certeza que deseja sair?"
+        tone="danger"
+      />
+      <ProfilePhotoPreviewDialog
+        avatarUrl={avatarUrl}
+        isOpen={isPhotoPreviewOpen}
+        onClose={() => setIsPhotoPreviewOpen(false)}
+      />
+      {isAssistantDialogOpen ? <AssistantChatDialog
+        isOpen={isAssistantDialogOpen}
+        onClose={() => setIsAssistantDialogOpen(false)}
+      /> : null}
+    </>
+  );
+}

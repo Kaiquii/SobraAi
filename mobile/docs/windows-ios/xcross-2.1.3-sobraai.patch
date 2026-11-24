@@ -1,0 +1,96 @@
+--- a/packages/xcross/lib/src/shared/compose/swift/swift_host_paths.dart
++++ b/packages/xcross/lib/src/shared/compose/swift/swift_host_paths.dart
+@@ -15,6 +15,8 @@
+ /// trigger a Kotlin/Native rebuild that produces the same app.
+ @internal
+ bool isSwiftHostSource(String path, {required String projectRoot}) {
++  path = _normalizeHostPath(path);
++  projectRoot = _normalizeHostPath(projectRoot);
+   if (p.extension(path) != '.swift') return false;
+   final relative = p.isRelative(path)
+       ? p.normalize(path)
+@@ -35,3 +37,11 @@
+     segment == 'Pods' ||
+     segment == 'Carthage' ||
+     segment.endsWith('Tests');
++
++// Local experiment: compare Win32 and extended-length spellings consistently.
++String _normalizeHostPath(String path) {
++  if (p.style != p.Style.windows) return path;
++  if (path.startsWith(r'\\?\UNC\')) return r'\\' + path.substring(8);
++  if (path.startsWith(r'\\?\')) return path.substring(4);
++  return path;
++}
+--- a/packages/xcross/lib/src/shared/compose/kmp_entry_discovery.dart
++++ b/packages/xcross/lib/src/shared/compose/kmp_entry_discovery.dart
+@@ -84,7 +84,7 @@
+   ) {
+     final kotlinEntry = _detectKotlinEntry(modulePath);
+     final swiftEntry = _detectSwiftAppEntry(projectRoot, baseName);
+-    if (swiftEntry != null && kotlinEntry == null) return swiftEntry;
++    if (swiftEntry != null) return swiftEntry;
+     if (kotlinEntry != null) return kotlinEntry;
+     return const ComposeEntryResult(KmpEntryKind.frameworkOnly);
+   }
+@@ -260,3 +260,4 @@
+   for (final m in RegExp(r'[0-9A-Za-z_\u0080-\uffff]+|\S').allMatches(text))
+     m[0]!,
+ ];
++
+--- a/packages/xcross/lib/src/shared/compose/project/ios_app_config.dart
++++ b/packages/xcross/lib/src/shared/compose/project/ios_app_config.dart
+@@ -76,9 +76,29 @@
+   IosAppConfig? load(String root) {
+     final appDir = directory(root);
+     if (appDir == null) return null;
+-    final file = files.file(p.join(appDir, 'Configuration', 'Config.xcconfig'));
++    var file = files.file(p.join(appDir, 'Configuration', 'Config.xcconfig'));
++    if (!file.existsSync()) {
++      file = files.file(p.join(appDir, 'Configuration', 'Base.xcconfig'));
++    }
+     if (!file.existsSync()) return null;
+-    return IosAppConfig.parse(file.readAsStringSync());
++    return IosAppConfig.parse(_readConfig(file, <String>{}));
++  }
++
++  String _readConfig(File file, Set<String> visited) {
++    final key = p.normalize(file.absolute.path);
++    if (!visited.add(key)) throw StateError('xcconfig include cycle');
++    try {
++      return file.readAsStringSync().replaceAllMapped(
++        RegExp(r'^\s*#include(\?)?\s*"([^"]+)"\s*$', multiLine: true),
++        (match) {
++          final included = files.file(p.join(p.dirname(file.path), match[2]!));
++          if (!included.existsSync() && match[1] != null) return '';
++          return _readConfig(included, visited);
++        },
++      );
++    } finally {
++      visited.remove(key);
++    }
+   }
+ 
+   /// The iOS app project's directory: `<root>/iosApp`, or when there is none,
+@@ -125,3 +145,4 @@
+         );
+   }
+ }
++
+--- a/packages/xcross/lib/src/shared/compose/compose_setup_options.dart
++++ b/packages/xcross/lib/src/shared/compose/compose_setup_options.dart
+@@ -82,6 +82,10 @@
+   }
+ 
+   static const Map<String, String> _sha256ByArtifact = {
++    'kotlin-native-prebuilt-2.4.21-windows-x86_64.zip':
++        '9b77b3972a05e35ddfa0dd9d50eb3ddc20618c9cc6cead1bc6f6d41d2cad24bd',
++    'kotlin-native-prebuilt-2.4.21-macos-x86_64.tar.gz':
++        '741799f163ad240f7fe54fae5334490c5a8a8fca9b9e9d39495db497b4f1763c',
+     'kotlin-native-prebuilt-2.2.20-linux-x86_64.tar.gz':
+         '5e2c25c7783f2a7f89aafeb3ccfb0fb5a671e0e32d283c3ab335dc5e29f19e32',
+     'kotlin-native-prebuilt-2.2.20-windows-x86_64.zip':
+@@ -142,3 +146,4 @@
+     return defaultKotlinNativeVersion;
+   }
+ }
++

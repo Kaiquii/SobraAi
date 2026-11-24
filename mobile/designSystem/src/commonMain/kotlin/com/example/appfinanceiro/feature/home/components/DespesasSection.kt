@@ -1,0 +1,342 @@
+package com.example.appfinanceiro.feature.home.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.AddCircleOutline
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.appfinanceiro.core.designsystem.components.ExpenseCard
+import com.example.appfinanceiro.core.designsystem.components.ExpenseCardStyle
+import com.example.appfinanceiro.core.designsystem.components.AppLoadingIndicator
+import com.example.appfinanceiro.core.designsystem.theme.PrimaryBlue
+import com.example.appfinanceiro.core.designsystem.theme.TextMuted
+import com.example.appfinanceiro.core.network.Expense
+
+@Composable
+fun DespesasHeaderSection(
+    isLoading: Boolean,
+    hasLoadedOnce: Boolean,
+    errorMessage: String?,
+    onRetry: () -> Unit,
+    expenses: List<Expense>,
+    onCategoryFilterClick: () -> Unit,
+    onPaymentSourceFilterClick: () -> Unit,
+    onPaymentStatusFilterClick: () -> Unit,
+    isCategoryFiltered: Boolean,
+    isPaymentSourceFiltered: Boolean,
+    isPaymentStatusFiltered: Boolean,
+    selectedCategoryName: String?,
+    selectedPaymentSourceName: String?,
+    selectedPaymentStatusName: String,
+    onClearCategoryFilter: () -> Unit,
+    onClearPaymentSourceFilter: () -> Unit,
+    onClearPaymentStatusFilter: () -> Unit,
+    onAddClick: () -> Unit,
+    errorHandledExternally: Boolean = false
+) {
+    val textColor = MaterialTheme.colorScheme.onBackground
+    val hasActiveFilters =
+        isCategoryFiltered || isPaymentSourceFiltered || isPaymentStatusFiltered
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Despesas",
+                color = textColor,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            ExpenseCountLabel(count = expenses.size.takeIf {
+                expenses.isNotEmpty() || (hasLoadedOnce && errorMessage == null)
+            })
+        }
+
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterButton(
+                label = "Origem",
+                isActive = isPaymentSourceFiltered,
+                icon = Icons.Default.AccountBalanceWallet,
+                onClick = onPaymentSourceFilterClick
+            )
+
+            FilterButton(
+                label = "Categoria",
+                isActive = isCategoryFiltered,
+                icon = Icons.Default.FilterList,
+                onClick = onCategoryFilterClick
+            )
+
+            FilterButton(
+                label = "Status: $selectedPaymentStatusName",
+                isActive = isPaymentStatusFiltered,
+                icon = Icons.Default.CheckCircle,
+                onClick = onPaymentStatusFilterClick
+            )
+        }
+
+        if (hasActiveFilters) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (selectedPaymentSourceName != null) {
+                    ActiveFilterChip(
+                        label = "Origem: $selectedPaymentSourceName",
+                        onClear = onClearPaymentSourceFilter
+                    )
+                }
+
+                if (selectedCategoryName != null) {
+                    ActiveFilterChip(
+                        label = "Categoria: $selectedCategoryName",
+                        onClear = onClearCategoryFilter
+                    )
+                }
+
+                if (isPaymentStatusFiltered) {
+                    ActiveFilterChip(
+                        label = "Status: $selectedPaymentStatusName",
+                        onClear = onClearPaymentStatusFilter
+                    )
+                }
+            }
+        }
+
+        if (expenses.isEmpty() && isLoading && !hasLoadedOnce) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                AppLoadingIndicator(size = 40.dp, strokeWidth = 4.dp)
+            }
+        } else if (expenses.isEmpty() && errorMessage != null) {
+            if (!errorHandledExternally) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(errorMessage, color = TextMuted, fontSize = 14.sp)
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    TextButton(onClick = onRetry) {
+                        Text(
+                            text = "Tentar novamente",
+                            color = PrimaryBlue,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        } else if (expenses.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 32.dp, horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = if (hasActiveFilters) {
+                        "Nenhuma despesa encontrada para estes filtros."
+                    } else {
+                        "Nenhuma despesa neste mês."
+                    },
+                    color = TextMuted
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                TextButton(onClick = onAddClick) {
+                    Text("Adicionar despesa", color = PrimaryBlue, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpenseCountLabel(count: Int?) {
+    val label = when (count) { null -> "—"; 1 -> "1 despesa"; else -> "$count despesas" }
+
+    Text(
+        text = label,
+        color = TextMuted,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1
+    )
+}
+
+@Composable
+fun AddExpenseButton(onAddClick: () -> Unit) {
+    val textColor = MaterialTheme.colorScheme.onBackground
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = TextMuted.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable { onAddClick() }
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Default.AddCircleOutline,
+                contentDescription = "Adicionar",
+                tint = textColor
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Text(text = "Adicionar Despesa", color = textColor)
+        }
+    }
+}
+
+@Composable
+private fun FilterButton(
+    label: String,
+    isActive: Boolean,
+    icon: ImageVector,
+    activeColor: Color = PrimaryBlue,
+    onClick: () -> Unit
+) {
+    val cardBg = MaterialTheme.colorScheme.surface
+
+    Row(
+        modifier = Modifier
+            .background(
+                if (isActive) activeColor.copy(alpha = 0.2f) else cardBg,
+                RoundedCornerShape(16.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (isActive) activeColor else TextMuted,
+            modifier = Modifier.size(16.dp)
+        )
+
+        Spacer(modifier = Modifier.width(4.dp))
+
+        Text(
+            text = label,
+            color = if (isActive) activeColor else TextMuted,
+            fontSize = 12.sp
+        )
+    }
+}
+
+@Composable
+private fun ActiveFilterChip(
+    label: String,
+    color: Color = PrimaryBlue,
+    onClear: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .background(color.copy(alpha = 0.14f), RoundedCornerShape(14.dp))
+            .clickable { onClear() }
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = color,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.width(6.dp))
+
+        Text(
+            text = "x",
+            color = color,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+fun ExpenseItem(
+    title: String,
+    categoryName: String,
+    paymentSource: String,
+    type: String,
+    date: String,
+    value: String,
+    isPaid: Boolean,
+    isAdvanced: Boolean = false,
+    advancedLabel: String? = null,
+    onViewClick: () -> Unit,
+    expenseType: String,
+    notes: String? = null
+) {
+    ExpenseCard(
+        style = ExpenseCardStyle.Compact,
+        title = title,
+        categoryName = categoryName,
+        paymentSource = paymentSource,
+        type = type,
+        date = date,
+        value = value,
+        expenseType = expenseType,
+        notes = notes,
+        isPaid = isPaid,
+        isAdvanced = isAdvanced,
+        advancedLabel = advancedLabel,
+        showDate = !isAdvanced,
+        onView = onViewClick
+    )
+}

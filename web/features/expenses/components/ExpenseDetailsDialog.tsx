@@ -1,0 +1,394 @@
+"use client";
+
+import { paymentSourceLabel } from "@/lib/payment-sources";
+
+import {
+  CalendarClock,
+  CalendarDays,
+  CheckCircle2,
+  FileText,
+  ListFilter,
+  ReceiptText,
+  TrendingDown,
+  WalletCards,
+  X,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { useLockBodyScroll } from "@/components/ui/use-lock-body-scroll";
+import type { Expense, PaymentSplit } from "@/features/expenses/types/expense";
+import { FinancialValue } from "@/components/ui/financial-value";
+import { cn } from "@/lib/utils";
+
+type ExpenseDetailsDialogProps = {
+  categoryName: string;
+  expense: Expense | null;
+  onClose: () => void;
+};
+
+function normalizeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function formatExpenseFullDate(date: string) {
+  const inputDate = date.includes("T") ? date.split("T")[0] : date;
+  const [year, month, day] = inputDate.split("-");
+
+  if (!year || !month || !day) {
+    return "--/--/----";
+  }
+
+  return `${day}/${month}/${year}`;
+}
+
+function formatPaidAt(date: string | null) {
+  if (!date) {
+    return "Data não informada.";
+  }
+
+  const paidAt = new Date(date);
+
+  if (Number.isNaN(paidAt.getTime())) {
+    return "Data não informada.";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(paidAt);
+}
+
+function getPaymentSourceLabel(source: string) {
+  return paymentSourceLabel(source);
+}
+
+function getExpensePaymentSplits(expense: Expense) {
+  return expense.payment_splits?.length
+    ? expense.payment_splits
+    : [{ amount: expense.amount, payment_source: expense.payment_source }];
+}
+
+function getInstallmentDetails(expense: Expense) {
+  if (normalizeText(expense.type) !== "parcelada") {
+    return null;
+  }
+
+  const current = Math.max(expense.current_installment ?? 1, 1);
+  const total = Math.max(expense.installments, 1);
+
+  return {
+    current,
+    progress: Math.min((current / total) * 100, 100),
+    total,
+  };
+}
+
+function DetailItem({
+  className,
+  icon: Icon,
+  label,
+  value,
+}: {
+  className?: string;
+  icon: typeof ReceiptText;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div
+      className={cn("flex min-h-20 min-w-0 items-center gap-3 p-4", className)}
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-600 dark:border-blue-900/70 dark:bg-blue-950/60 dark:text-blue-400">
+        <Icon aria-hidden="true" size={17} />
+      </span>
+      <div className="min-w-0">
+        <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          {label}
+        </dt>
+        <dd className="mt-0.5 wrap-break-word text-sm font-semibold text-slate-950 dark:text-slate-50">
+          {value}
+        </dd>
+      </div>
+    </div>
+  );
+}
+
+function PaymentSplitsDetailItem({ splits }: { splits: PaymentSplit[] }) {
+  return (
+    <div className="flex min-w-0 items-start gap-3 border-t border-slate-200 px-4 py-3 dark:border-slate-800 sm:col-span-2">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-600 dark:border-blue-900/70 dark:bg-blue-950/60 dark:text-blue-400">
+        <WalletCards aria-hidden="true" size={16} />
+      </span>
+      <dl className="min-w-0 flex-1">
+        <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          Distribuição do pagamento
+        </dt>
+        <dd className="mt-1.5 flex flex-wrap gap-1.5">
+          {splits.map((split) => (
+            <span
+              className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              key={split.payment_source}
+            >
+              <span className="truncate">
+                {getPaymentSourceLabel(split.payment_source)}
+              </span>
+              <span className="shrink-0 border-l border-slate-300 pl-1.5 font-semibold tabular-nums text-slate-950 dark:border-slate-600 dark:text-slate-50">
+                <FinancialValue value={split.amount} />
+              </span>
+            </span>
+          ))}
+        </dd>
+      </dl>
+    </div>
+  );
+}
+
+export function ExpenseDetailsDialog({
+  categoryName,
+  expense,
+  onClose,
+}: ExpenseDetailsDialogProps) {
+  useLockBodyScroll(Boolean(expense));
+
+  if (!expense) {
+    return null;
+  }
+
+  const notes = expense.notes?.trim();
+  const installmentDetails = getInstallmentDetails(expense);
+  const paymentSplits = getExpensePaymentSplits(expense);
+
+  return (
+    <div
+      aria-label="Detalhes da despesa"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/75 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6"
+      role="dialog"
+    >
+      <div data-mobile-expense-details className="mobile-compact-dialog my-auto flex min-h-0 flex-col border border-slate-200 bg-white text-slate-950 shadow-xl dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 sm:hidden">
+        <h2 className="shrink-0 text-[22px] font-bold leading-7">Detalhes da despesa</h2>
+        <div className="mt-4 min-h-0 overflow-y-auto overscroll-contain">
+          <div className="rounded-[18px] bg-brand/10 p-4">
+            <p className="wrap-anywhere text-base font-semibold">{expense.description}</p>
+            <strong className="mt-2 block wrap-anywhere text-[28px] font-bold leading-9 tabular-nums"><FinancialValue value={expense.amount} /></strong>
+            <div className="mt-2.5 flex flex-wrap gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400">
+              <span className="max-w-full rounded-full bg-brand/15 px-2.5 py-1.5 wrap-anywhere">{categoryName}</span>
+              <span className="max-w-full rounded-full bg-brand/15 px-2.5 py-1.5 wrap-anywhere">{expense.type}{installmentDetails ? ` (${installmentDetails.current}/${installmentDetails.total})` : ""}</span>
+            </div>
+            {installmentDetails ? (
+              <div aria-label={`Progresso do parcelamento: ${installmentDetails.current} de ${installmentDetails.total}`} aria-valuemax={installmentDetails.total} aria-valuemin={0} aria-valuenow={Math.min(installmentDetails.current, installmentDetails.total)} className="mt-3 h-1.5 overflow-hidden rounded-full bg-blue-100 dark:bg-blue-950" role="progressbar">
+                <div className="h-full rounded-full bg-blue-600 dark:bg-blue-400" style={{ width: `${installmentDetails.progress}%` }} />
+              </div>
+            ) : null}
+          </div>
+
+          <dl className="mt-3.5 divide-y divide-slate-200 rounded-2xl bg-slate-50 px-3.5 py-1 text-sm dark:divide-slate-800 dark:bg-slate-950/60">
+            {paymentSplits.length > 1 ? (
+              <div className="py-2.5">
+                <dt className="text-xs text-slate-500 dark:text-slate-400">Pagamento dividido</dt>
+                <dd className="mt-2 space-y-2.5">
+                  {paymentSplits.map((split) => (
+                    <div className="grid grid-cols-[minmax(0,.7fr)_minmax(0,1.3fr)] gap-3" key={split.payment_source}>
+                      <span className="text-xs text-slate-500 wrap-anywhere dark:text-slate-400">{getPaymentSourceLabel(split.payment_source)}</span>
+                      <strong className="font-semibold tabular-nums wrap-anywhere"><FinancialValue value={split.amount} /></strong>
+                    </div>
+                  ))}
+                </dd>
+              </div>
+            ) : (
+              <div className="grid grid-cols-[minmax(0,.7fr)_minmax(0,1.3fr)] gap-3 py-2.5">
+                <dt className="text-xs text-slate-500 dark:text-slate-400">Origem</dt>
+                <dd className="font-semibold wrap-anywhere">{getPaymentSourceLabel(paymentSplits[0]?.payment_source ?? "")}</dd>
+              </div>
+            )}
+            <div className="grid grid-cols-[minmax(0,.7fr)_minmax(0,1.3fr)] gap-3 py-2.5">
+              <dt className="text-xs text-slate-500 dark:text-slate-400">Data</dt>
+              <dd className="font-semibold wrap-anywhere">{formatExpenseFullDate(expense.date)}</dd>
+            </div>
+            {expense.is_paid ? (
+              <div className="grid grid-cols-[minmax(0,.7fr)_minmax(0,1.3fr)] gap-3 py-2.5">
+                <dt className="text-xs text-slate-500 dark:text-slate-400">Pago em</dt>
+                <dd className="font-semibold wrap-anywhere">{formatPaidAt(expense.paid_at)}</dd>
+              </div>
+            ) : null}
+          </dl>
+
+          {expense.is_advanced ? (
+            <div data-advance-info className="mt-3.5 rounded-2xl bg-brand/10 px-3 py-2.5">
+              <p className="scrollbar-none overflow-x-auto text-sm font-bold whitespace-nowrap">{expense.advanced_at ? `Adiantada em ${formatExpenseFullDate(expense.advanced_at)}` : "Despesa adiantada"}</p>
+            </div>
+          ) : null}
+
+          <div className="mt-3.5">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Observações</p>
+            <p className="mt-1.5 max-h-37.5 overflow-y-auto overscroll-contain rounded-2xl bg-slate-50 p-3 text-sm leading-5.25 whitespace-pre-wrap text-slate-600 wrap-anywhere dark:bg-slate-950/60 dark:text-slate-300">{notes || "Sem observações"}</p>
+          </div>
+        </div>
+        <div className="mobile-compact-dialog-actions shrink-0">
+          <Button className="px-3 text-blue-600 dark:text-blue-400" onClick={onClose} variant="ghost">Fechar</Button>
+        </div>
+      </div>
+
+      <div data-desktop-expense-details className="my-auto hidden max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 border-t-4 border-t-blue-600 bg-white shadow-2xl shadow-slate-950/20 dark:border-slate-800 dark:border-t-blue-500 dark:bg-slate-900 sm:flex sm:max-h-[calc(100dvh-3rem)]">
+        <div className="shrink-0 border-b border-dashed border-slate-200 px-5 py-3 dark:border-slate-700 sm:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-900/70 dark:bg-blue-950/60 dark:text-blue-400">
+                <ReceiptText aria-hidden="true" size={16} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold leading-none uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                  Detalhes da despesa
+                </p>
+                <h2
+                  className="mt-1.5 wrap-break-word text-2xl leading-tight font-semibold tracking-normal text-slate-950 dark:text-white sm:text-3xl"
+                  id="expense-details-title"
+                >
+                  {expense.description}
+                </h2>
+              </div>
+            </div>
+
+            <Button
+              aria-label="Fechar detalhes da despesa"
+              className="-mr-1 mt-0.5 shrink-0 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-50"
+              onClick={onClose}
+              size="icon"
+              title="Fechar"
+              variant="ghost"
+            >
+              <X aria-hidden="true" size={20} />
+            </Button>
+          </div>
+        </div>
+
+        <div className="min-h-0 overflow-y-auto px-5 pb-5 sm:px-6 sm:pb-6">
+          <div className="flex items-center justify-between gap-5 border-b border-dashed border-slate-200 py-4 dark:border-slate-700">
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Valor da despesa
+              </p>
+              <strong className="mt-1 block wrap-break-word text-3xl font-semibold tabular-nums text-slate-950 dark:text-white sm:text-4xl">
+                <FinancialValue prefix="- " value={expense.amount} />
+              </strong>
+            </div>
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-700 shadow-sm dark:border-red-950/80 dark:bg-red-950/40 dark:text-red-300">
+              <TrendingDown aria-hidden="true" size={22} />
+            </span>
+          </div>
+
+          <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Informações
+          </p>
+
+          <dl className="mt-2 grid overflow-hidden rounded-xl border border-slate-200 bg-slate-50/60 shadow-sm dark:border-slate-800 dark:bg-slate-950/45 sm:grid-cols-2">
+            <DetailItem
+              className="border-b border-slate-200 dark:border-slate-800 sm:border-r"
+              icon={ListFilter}
+              label="Categoria"
+              value={categoryName}
+            />
+            <DetailItem
+              className="border-b border-slate-200 dark:border-slate-800"
+              icon={WalletCards}
+              label={paymentSplits.length > 1 ? "Origens" : "Origem"}
+              value={
+                paymentSplits.length > 1
+                  ? `${paymentSplits.length} fontes de pagamento`
+                  : getPaymentSourceLabel(
+                      paymentSplits[0]?.payment_source ?? "",
+                    )
+              }
+            />
+            <DetailItem
+              className="border-b border-slate-200 dark:border-slate-800 sm:border-r sm:border-b-0"
+              icon={CalendarDays}
+              label="Data prevista"
+              value={formatExpenseFullDate(expense.date)}
+            />
+            <DetailItem icon={ReceiptText} label="Tipo" value={expense.type} />
+
+            {expense.is_advanced && expense.advanced_at ? (
+              <DetailItem
+                className="border-t border-amber-200 bg-amber-50/60 dark:border-amber-950/70 dark:bg-amber-950/20 sm:col-span-2"
+                icon={CalendarClock}
+                label="Considerada no planejamento"
+                value={formatExpenseFullDate(expense.advanced_at)}
+              />
+            ) : null}
+
+            {paymentSplits.length > 1 ? (
+              <PaymentSplitsDetailItem splits={paymentSplits} />
+            ) : null}
+
+            {expense.is_paid ? (
+              <DetailItem
+                className="border-t border-emerald-200 bg-emerald-50/60 dark:border-emerald-950/70 dark:bg-emerald-950/20 sm:col-span-2"
+                icon={CheckCircle2}
+                label="Status de pagamento"
+                value={`Paga em ${formatPaidAt(expense.paid_at)}`}
+              />
+            ) : null}
+
+            {installmentDetails ? (
+              <div className="border-t border-blue-200 bg-blue-50/70 p-4 dark:border-blue-950/70 dark:bg-blue-950/25 sm:col-span-2">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white text-blue-700 dark:border-blue-900 dark:bg-blue-950/70 dark:text-blue-300">
+                      <FileText aria-hidden="true" size={17} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                        Parcelamento
+                      </p>
+                      <p className="mt-0.5 truncate text-sm font-semibold text-slate-950 dark:text-slate-50">
+                        {Math.round(installmentDetails.progress)}% concluído
+                      </p>
+                    </div>
+                  </div>
+                  <strong className="shrink-0 text-lg font-semibold tabular-nums text-blue-700 dark:text-blue-300">
+                    {installmentDetails.current} de {installmentDetails.total}
+                  </strong>
+                </div>
+
+                <div
+                  aria-label={`Progresso do parcelamento: ${installmentDetails.current} de ${installmentDetails.total}`}
+                  aria-valuemax={installmentDetails.total}
+                  aria-valuemin={0}
+                  aria-valuenow={Math.min(
+                    installmentDetails.current,
+                    installmentDetails.total,
+                  )}
+                  className="mt-3 h-1.5 overflow-hidden rounded-full bg-blue-100 dark:bg-blue-950"
+                  role="progressbar"
+                >
+                  <div
+                    className="h-full rounded-full bg-blue-600 dark:bg-blue-400"
+                    style={{ width: `${installmentDetails.progress}%` }}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </dl>
+
+          <div className="mt-5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <FileText aria-hidden="true" className="text-blue-500" size={15} />
+            Observações
+          </div>
+
+          <div className="mt-2 max-w-full overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-50/40 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-950/30">
+            <p className="max-h-28 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-600 wrap-anywhere dark:text-slate-300">
+              {notes || "Nenhuma observação informada."}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

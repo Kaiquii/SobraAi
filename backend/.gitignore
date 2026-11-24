@@ -1,0 +1,61 @@
+# ARQUIVOS DE AMBIENTE E SEGURANÇA (CRÍTICO)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.ppk
+*.p12
+*.pfx
+*.jks
+*.keystore
+*-service-account*.json
+*play-integrity*.json
+
+# BINÁRIOS GERADOS PELO GO
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/api.exe
+/app.exe
+/api-financeira
+/bin/
+
+# TESTES E COBERTURA DE CÓDIGO
+*.test
+*.out
+coverage.txt
+coverage.out
+*.log
+
+# PASTAS DE DEPENDÊNCIAS
+/vendor/
+
+# ARQUIVOS DE IDE E EDITORES (VS Code, etc)
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ARQUIVOS DO SISTEMA OPERACIONAL
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Ignorar backups e imagens Docker
+*.tar
+*.dump
+*.backup
+migration-backup/
+
+# DADOS E ARQUIVOS LOCAIS GERADOS PELA APLICACAO
+/uploads/
+/tmp/
+/.codex-go-cache/
+/.artifacts/

@@ -1,0 +1,7 @@
+toolchains:
+  swift: 'C:/Users/kaiqu/AppData/Local/Programs/Swift/Toolchains/6.4.3+Asserts/usr/bin'
+  llvm:
+    - 'C:/Program Files/LLVM/bin'
+roots:
+  javaHome: 'C:/Program Files/Android/Android Studio/jbr'
+  konanData: 'C:/Users/kaiqu/AppData/Local/SobraAiTools/konan'

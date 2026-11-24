@@ -1,0 +1,46 @@
+# Modelo sem credenciais. Copie para docker-compose.yml e configure o .env local.
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: app_financeiro_db
+    restart: always
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:?Defina POSTGRES_USER no .env}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}"
+      POSTGRES_DB: "${POSTGRES_DB:?Defina POSTGRES_DB no .env}"
+      TZ: "${TZ:?Defina TZ no .env}"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    image: app-financeiro-api
+    container_name: app_financeiro_api
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    volumes:
+      - /var/app-financeiro/uploads:/root/uploads
+    environment:
+      - TZ=${TZ:?Defina TZ no .env}
+      - GIN_MODE=${GIN_MODE:?Defina GIN_MODE no .env}
+      - DB_DSN=${DB_DSN:?Defina DB_DSN no .env}
+      - JWT_SECRET=${JWT_SECRET:?Defina JWT_SECRET no .env}
+      - PORT=${PORT:?Defina PORT no .env}
+      - UPLOADS_DIR=${UPLOADS_DIR:?Defina UPLOADS_DIR no .env}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:?Defina GEMINI_API_KEY no .env}
+      - GEMINI_MODEL=${GEMINI_MODEL:?Defina GEMINI_MODEL no .env}
+      - GROQ_API_KEY=${GROQ_API_KEY:?Defina GROQ_API_KEY no .env}
+      - GROQ_MODEL=${GROQ_MODEL:?Defina GROQ_MODEL no .env}
+      - SMTP_HOST=${SMTP_HOST:?Defina SMTP_HOST no .env}
+      - SMTP_PORT=${SMTP_PORT:?Defina SMTP_PORT no .env}
+      - SMTP_EMAIL=${SMTP_EMAIL:?Defina SMTP_EMAIL no .env}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:?Defina SMTP_PASSWORD no .env}
+
+volumes:
+  pgdata:

@@ -1,0 +1,1030 @@
+"use client";
+
+import {
+  CalendarClock,
+  CalendarCheck,
+  CalendarArrowUp,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Circle,
+  Eye,
+  FileText,
+  ListFilter,
+  Pencil,
+  Plus,
+  ReceiptText,
+  Search,
+  Trash2,
+  WalletCards,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+
+import { Alert } from "@/components/ui/alert";
+import { AppNotification } from "@/components/ui/app-notification";
+import { Button } from "@/components/ui/button";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { DropdownSelect } from "@/components/ui/dropdown-select";
+import {
+  getCurrentMonthReference,
+  MonthSwitcher,
+} from "@/components/ui/month-switcher";
+import { ExpenseDeleteDialog } from "@/features/expenses/components/ExpenseDeleteDialog";
+import { ExpenseAdvanceDialog } from "@/features/expenses/components/ExpenseAdvanceDialog";
+import { ExpenseDetailsDialog } from "@/features/expenses/components/ExpenseDetailsDialog";
+import { ExpenseListControls } from "@/features/expenses/components/ExpenseListControls";
+import { expenseTotalLabel, expenseTypeAccent } from "@/features/expenses/utils/expensePresentation";
+import {
+  ExpenseFormDialog,
+  type ExpenseFormMode,
+} from "@/features/expenses/components/ExpenseFormDialog";
+import { useExpenseStore } from "@/features/expenses/store/useExpenseStore";
+import { useExpenseComposerStore } from "@/features/expenses/store/useExpenseComposerStore";
+import type {
+  Category,
+  Expense,
+  ExpenseTypeFilter,
+} from "@/features/expenses/types/expense";
+import { FinancialValue } from "@/components/ui/financial-value";
+import { formatMoney } from "@/lib/formatters";
+import { paymentSources, paymentSourceLabel, paymentSourcesMatch } from "@/lib/payment-sources";
+
+type PaymentSourceFilter = import("@/lib/payment-sources").CanonicalPaymentSource | "Todas";
+type PaymentStatusFilter = "Pagas" | "Pendentes" | "Todas";
+
+const typeFilters: ExpenseTypeFilter[] = [
+  "Todas",
+  "Parceladas",
+  "\u00danicas",
+  "Fixas",
+];
+const paymentSourceFilters: PaymentSourceFilter[] = [
+  "Todas",
+  ...paymentSources,
+];
+const paymentStatusFilters: PaymentStatusFilter[] = [
+  "Todas",
+  "Pendentes",
+  "Pagas",
+];
+
+const typeFilterOptions = typeFilters.map((filter) => ({
+  label: filter,
+  value: filter,
+}));
+
+const paymentSourceFilterOptions = paymentSourceFilters.map((source) => ({
+  label:
+    source === "Todas"
+      ? "Todas origens"
+      : paymentSourceLabel(source),
+  value: source,
+}));
+
+const paymentStatusFilterOptions = paymentStatusFilters.map((status) => ({
+  label: status === "Todas" ? "Todos status" : status,
+  value: status,
+}));
+
+function normalizeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function normalizeNumericSearch(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function matchesSearchFilter(expense: Expense, searchQuery: string) {
+  const normalizedSearch = normalizeText(searchQuery.trim());
+
+  if (!normalizedSearch) {
+    return true;
+  }
+
+  if (normalizeText(expense.description).includes(normalizedSearch)) {
+    return true;
+  }
+
+  const numericSearch = normalizeNumericSearch(searchQuery);
+
+  if (!numericSearch) {
+    return false;
+  }
+
+  const amountSearchTargets = [
+    formatMoney(expense.amount),
+    String(expense.amount),
+    expense.amount.toFixed(2),
+  ]
+    .map(normalizeNumericSearch)
+    .join(" ");
+
+  return amountSearchTargets.includes(numericSearch);
+}
+
+function matchesTypeFilter(expense: Expense, filter: ExpenseTypeFilter) {
+  const type = normalizeText(expense.type);
+
+  if (filter === "Todas") {
+    return true;
+  }
+
+  if (filter === "Parceladas") {
+    return type === "parcelada";
+  }
+
+  if (filter === "Fixas") {
+    return type === "fixa";
+  }
+
+  return type === "unica";
+}
+
+function matchesPaymentSourceFilter(
+  expense: Expense,
+  filter: PaymentSourceFilter,
+) {
+  if (filter === "Todas") {
+    return true;
+  }
+
+  const sources = (
+    expense.payment_splits?.length
+      ? expense.payment_splits.map((split) => split.payment_source)
+      : [expense.payment_source]
+  );
+  return sources.some((source) => paymentSourcesMatch(source, filter));
+}
+
+function matchesCategoryFilter(expense: Expense, selectedCategoryId: string) {
+  if (selectedCategoryId === "Todas") {
+    return true;
+  }
+
+  return expense.category_id === Number(selectedCategoryId);
+}
+
+function matchesPaymentStatusFilter(
+  expense: Expense,
+  filter: PaymentStatusFilter,
+) {
+  if (filter === "Todas") {
+    return true;
+  }
+
+  return filter === "Pagas" ? expense.is_paid : !expense.is_paid;
+}
+
+function getCategoryName(
+  expense: Expense,
+  categoriesById: Map<number, string>,
+) {
+  if (expense.category) {
+    return expense.category;
+  }
+
+  if (typeof expense.category_id === "number") {
+    return categoriesById.get(expense.category_id) ?? "Sem categoria";
+  }
+
+  return "Sem categoria";
+}
+
+function formatExpenseDate(date: string) {
+  const inputDate = date.includes("T") ? date.split("T")[0] : date;
+  const [year, month, day] = inputDate.split("-");
+
+  if (!year || !month || !day) {
+    return "--/--";
+  }
+
+  return `${day}/${month}`;
+}
+
+function formatExpenseFullDate(date: string) {
+  const inputDate = date.includes("T") ? date.split("T")[0] : date;
+  const [year, month, day] = inputDate.split("-");
+
+  if (!year || !month || !day) {
+    return "--/--/----";
+  }
+
+  return `${day}/${month}/${year}`;
+}
+
+function getExpenseMonthReference(expense: Expense) {
+  const [year, month] =
+    expense.date.split("T")[0]?.split("-").map(Number) ?? [];
+
+  if (!year || !month) {
+    return null;
+  }
+
+  return { month, year };
+}
+
+function getPaymentSourceLabel(source: string) {
+  return paymentSourceLabel(source, true);
+}
+
+function getExpensePaymentSources(expense: Expense) {
+  const sources = expense.payment_splits?.length
+    ? expense.payment_splits.map((split) => split.payment_source)
+    : [expense.payment_source];
+
+  return sources.map(getPaymentSourceLabel);
+}
+
+function getInstallmentLabel(expense: Expense) {
+  if (normalizeText(expense.type) !== "parcelada") {
+    return null;
+  }
+
+  const current = expense.current_installment ?? 1;
+
+  return `${current}/${expense.installments}`;
+}
+
+function getCategoriesMap(categories: Category[]) {
+  return new Map(categories.map((category) => [category.id, category.name]));
+}
+
+type ExpenseCardProps = {
+  categoryName: string;
+  expense: Expense;
+  isAdvanceStatusUpdating: boolean;
+  isHighlighted?: boolean;
+  onDelete: (expense: Expense) => void;
+  onAdvance: (expense: Expense) => void;
+  onEdit: (expense: Expense) => void;
+  onTogglePaid: (expense: Expense) => void;
+  onView: (expense: Expense) => void;
+  isPaymentStatusUpdating: boolean;
+};
+
+function ExpenseCard({
+  categoryName,
+  expense,
+  isAdvanceStatusUpdating,
+  isHighlighted = false,
+  onDelete,
+  onAdvance,
+  onEdit,
+  onTogglePaid,
+  onView,
+  isPaymentStatusUpdating,
+}: ExpenseCardProps) {
+  const installmentLabel = getInstallmentLabel(expense);
+  const notes = expense.notes?.trim();
+  const paymentSources = getExpensePaymentSources(expense);
+  const canAdvance = ["unica", "parcelada"].includes(
+    normalizeText(expense.type),
+  );
+
+  return (
+    <article
+      className={`grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-2.5 gap-y-2 rounded-lg border bg-white px-3 py-3 shadow-sm hover:shadow-md dark:bg-slate-900/85 max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-2 max-sm:gap-y-0 max-sm:rounded-2xl max-sm:border-0 max-sm:bg-slate-50 max-sm:p-4 max-sm:shadow-none dark:max-sm:bg-slate-900 sm:items-center sm:px-4 ${
+        expense.is_paid
+          ? "border-emerald-200 hover:border-emerald-300 dark:border-emerald-900/70 dark:hover:border-emerald-800"
+          : "border-slate-200 hover:border-blue-200 dark:border-slate-800 dark:hover:border-blue-900/70"
+      } ${isHighlighted ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-100 dark:ring-amber-300 dark:ring-offset-slate-950" : ""}`}
+      id={`expense-${expense.id}`}
+      onDoubleClick={() => onView(expense)}
+    >
+      <div className="row-start-1 hidden h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-950/55 dark:text-blue-300 sm:row-span-2 sm:flex">
+        <ReceiptText aria-hidden="true" size={19} />
+      </div>
+
+      <div className="col-start-2 row-start-1 min-w-0 max-sm:col-start-1 max-sm:row-span-2 sm:row-span-2">
+        <h2 className="truncate text-base font-bold text-slate-950 dark:text-white sm:font-semibold">
+          {expense.description}
+        </h2>
+        <p className="truncate text-[13px] text-slate-500 dark:text-slate-400 sm:text-sm sm:font-medium">
+          {categoryName}
+        </p>
+        <div className="mt-2 flex min-w-0 items-center gap-1.5 sm:contents">
+          <div className="scrollbar-none flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 max-sm:flex-nowrap max-sm:overflow-x-auto sm:mt-1.5 sm:text-sm">
+            <span className={`${expenseTypeAccent(expense.type)} rounded bg-(--expense-accent)/10 px-1.5 py-0.5 text-[10px] text-(--expense-accent) max-sm:shrink-0 max-sm:whitespace-nowrap sm:text-xs sm:font-medium`}>
+              <span className="sm:hidden">{installmentLabel ? `Parc. ${installmentLabel}` : expense.type}</span>
+              <span className="hidden sm:inline">{expense.type}</span>
+            </span>
+            {installmentLabel ? (
+              <span className={`${expenseTypeAccent(expense.type)} hidden rounded bg-(--expense-accent)/10 px-1.5 py-0.5 text-xs font-medium text-(--expense-accent) sm:inline`}>
+                {installmentLabel}
+              </span>
+            ) : null}
+            <span className={expense.is_advanced ? "hidden sm:inline" : "max-sm:shrink-0 max-sm:whitespace-nowrap"}>• {formatExpenseDate(expense.date)}</span>
+            {expense.is_advanced && expense.advanced_at ? (
+              <span className="rounded bg-brand/14 px-1.5 py-0.5 text-[10px] font-semibold text-brand max-sm:shrink-0 max-sm:whitespace-nowrap sm:bg-amber-50 sm:text-xs sm:text-amber-800 sm:dark:bg-amber-950/50 sm:dark:text-amber-200">
+                <span className="sm:hidden">Adiantada</span><span className="hidden sm:inline">Adiantada para {formatExpenseFullDate(expense.advanced_at)}</span>
+              </span>
+            ) : null}
+          </div>
+          {notes ? (
+            <span aria-label="Tem observações" className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-brand/10 p-1 text-brand sm:hidden" role="img">
+              <FileText aria-hidden="true" size={12} />
+            </span>
+          ) : null}
+        </div>
+        {notes ? (
+          <p
+            className="mt-2 hidden max-w-full items-center gap-1.5 truncate rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-500 dark:bg-slate-950/60 dark:text-slate-400 sm:flex"
+          >
+            <FileText
+              aria-hidden="true"
+              className="shrink-0 text-blue-500"
+              size={13}
+            />
+            <span className="truncate">{notes}</span>
+          </p>
+        ) : null}
+      </div>
+
+      <div className="contents">
+        <div
+          className="col-span-1 col-start-2 row-start-1 flex w-36 items-center justify-between gap-0 sm:col-start-3 sm:w-auto sm:justify-end sm:gap-1 [&_button]:min-h-8 [&_button]:min-w-7 sm:[&_button]:min-h-7 sm:[&_button]:min-w-7"
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label={`${expense.is_paid ? "Desmarcar" : "Marcar"} ${expense.description} como paga`}
+            className={
+              expense.is_paid
+                ? "inline-flex h-6 cursor-pointer items-center justify-center gap-1 rounded-full bg-emerald-100 px-2 text-emerald-700 hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-950"
+                : "inline-flex h-6 cursor-pointer items-center justify-center gap-1 rounded-full px-2 text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-400 dark:hover:text-emerald-300"
+            }
+            disabled={isPaymentStatusUpdating}
+            onClick={() => onTogglePaid(expense)}
+            title={expense.is_paid ? "Desmarcar como paga" : "Marcar como paga"}
+            type="button"
+          >
+            {expense.is_paid ? (
+              <Check aria-hidden="true" size={16} strokeWidth={2.8} />
+            ) : (
+              <Circle aria-hidden="true" size={16} strokeWidth={2.2} />
+            )}
+            <span className="sr-only sm:not-sr-only sm:text-[11px] sm:font-semibold">
+              {expense.is_paid ? "Paga" : "Pagar"}
+            </span>
+          </button>
+          {canAdvance ? (
+            <button
+              aria-label={`${expense.is_advanced ? "Alterar adiantamento de" : "Adiantar"} ${expense.description}`}
+              className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-blue-600 hover:bg-blue-500/10 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-400 dark:hover:text-blue-300"
+              disabled={isAdvanceStatusUpdating}
+              onClick={() => onAdvance(expense)}
+              title={expense.is_advanced ? "Alterar adiantamento" : "Adiantar"}
+              type="button"
+            >
+              {expense.is_advanced ? (
+                <CalendarCheck aria-hidden="true" size={16} strokeWidth={2.4} />
+              ) : (
+                <CalendarArrowUp aria-hidden="true" size={16} strokeWidth={2.4} />
+              )}
+            </button>
+          ) : null}
+          <button
+            aria-label={`Visualizar ${expense.description}`}
+            className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-slate-500 hover:bg-slate-500/10 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            onClick={() => onView(expense)}
+            title="Visualizar"
+            type="button"
+          >
+            <Eye aria-hidden="true" size={16} strokeWidth={2.4} />
+          </button>
+          <button
+            aria-label={`Editar ${expense.description}`}
+            className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-blue-500 hover:bg-blue-500/10 hover:text-blue-400"
+            onClick={() => onEdit(expense)}
+            title="Editar"
+            type="button"
+          >
+            <Pencil aria-hidden="true" size={16} strokeWidth={2.4} />
+          </button>
+          <button
+            aria-label={`Excluir ${expense.description}`}
+            className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-red-400 hover:bg-red-500/10 hover:text-red-300"
+            onClick={() => onDelete(expense)}
+            title="Excluir"
+            type="button"
+          >
+            <Trash2 aria-hidden="true" size={16} strokeWidth={2.4} />
+          </button>
+        </div>
+
+        <div className="col-start-2 row-start-2 flex min-w-0 flex-col items-end gap-1 text-right sm:col-start-3 sm:max-w-none sm:gap-1.5">
+          <strong className="wrap-anywhere text-base font-bold tabular-nums text-slate-950 dark:text-white sm:text-lg sm:font-semibold">
+            <FinancialValue prefix="- " value={expense.amount} />
+          </strong>
+          <p className="inline-flex max-w-full items-center gap-1 text-xs text-slate-500 dark:text-slate-400 sm:rounded-full sm:bg-slate-100 sm:px-1.5 sm:py-0.5 sm:text-sm sm:font-medium sm:text-slate-600 dark:sm:bg-slate-800 dark:sm:text-slate-300">
+            <WalletCards
+              aria-hidden="true"
+              className="text-blue-500"
+              size={14}
+            />
+            <span className="truncate">{paymentSources.length === 1
+              ? paymentSources[0]
+              : <><span className="sm:hidden">Pagamento dividido</span><span className="hidden sm:inline">{paymentSources.length} origens</span></>}</span>
+          </p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ExpensesSkeleton() {
+  return (
+    <div className="space-y-2.5">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
+          className="h-24 animate-pulse rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+          key={index}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function ExpensesView() {
+  const isComposerOpen = useExpenseComposerStore((state) => state.isOpen);
+  const closeComposer = useExpenseComposerStore((state) => state.close);
+  const [{ month, year }, setSelectedDate] = useState(getCurrentMonthReference);
+  const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
+  const [advanceTarget, setAdvanceTarget] = useState<Expense | null>(null);
+  const [detailsTarget, setDetailsTarget] = useState<Expense | null>(null);
+  const [formExpense, setFormExpense] = useState<Expense | null>(null);
+  const [formMode, setFormMode] = useState<ExpenseFormMode | null>(null);
+  const [highlightedExpenseId, setHighlightedExpenseId] = useState<
+    number | null
+  >(null);
+  const [paymentStatusTarget, setPaymentStatusTarget] =
+    useState<Expense | null>(null);
+  const [undoAdvanceTarget, setUndoAdvanceTarget] = useState<Expense | null>(
+    null,
+  );
+  const [paymentSourceFilter, setPaymentSourceFilter] =
+    useState<PaymentSourceFilter>("Todas");
+  const [paymentStatusFilter, setPaymentStatusFilter] =
+    useState<PaymentStatusFilter>("Todas");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState("Todas");
+  const [typeFilter, setTypeFilter] = useState<ExpenseTypeFilter>("Todas");
+
+  const categories = useExpenseStore((state) => state.categories);
+  const advancedExpenses = useExpenseStore((state) => state.advancedExpenses);
+  const clearFeedback = useExpenseStore((state) => state.clearFeedback);
+  const advanceStatusUpdatingId = useExpenseStore(
+    (state) => state.advanceStatusUpdatingId,
+  );
+  const effectiveExpenses = useExpenseStore((state) => state.effectiveExpenses);
+  const error = useExpenseStore((state) => state.error);
+  const expenses = useExpenseStore((state) => state.expenses);
+  const isLoading = useExpenseStore((state) => state.isLoading);
+  const loadInitialData = useExpenseStore((state) => state.loadInitialData);
+  const message = useExpenseStore((state) => state.message);
+  const paymentStatusUpdatingId = useExpenseStore(
+    (state) => state.paymentStatusUpdatingId,
+  );
+  const updatePaymentStatus = useExpenseStore(
+    (state) => state.updatePaymentStatus,
+  );
+  const updateAdvanceStatus = useExpenseStore(
+    (state) => state.updateAdvanceStatus,
+  );
+
+  useEffect(() => {
+    // Keep the month's categories available when status filters change locally.
+    void loadInitialData(month, year);
+  }, [loadInitialData, month, year]);
+
+  useEffect(() => {
+    if (!message) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      clearFeedback();
+    }, 3500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [clearFeedback, message]);
+
+  useEffect(() => {
+    if (
+      !highlightedExpenseId ||
+      isLoading ||
+      !expenses.some((expense) => expense.id === highlightedExpenseId)
+    ) {
+      return;
+    }
+
+    document
+      .getElementById(`expense-${highlightedExpenseId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    const timeoutId = window.setTimeout(() => {
+      setHighlightedExpenseId(null);
+    }, 3000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [expenses, highlightedExpenseId, isLoading]);
+
+  const categoriesById = useMemo(
+    () => getCategoriesMap(categories),
+    [categories],
+  );
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter((expense) => {
+      const matchesSearch = matchesSearchFilter(expense, searchQuery);
+      const matchesType = matchesTypeFilter(expense, typeFilter);
+      const matchesPaymentSource = matchesPaymentSourceFilter(
+        expense,
+        paymentSourceFilter,
+      );
+      const matchesCategory = matchesCategoryFilter(
+        expense,
+        selectedCategoryId,
+      );
+      const matchesPaymentStatus = matchesPaymentStatusFilter(
+        expense,
+        paymentStatusFilter,
+      );
+
+      return (
+        matchesSearch &&
+        matchesType &&
+        matchesPaymentSource &&
+        matchesCategory &&
+        matchesPaymentStatus
+      );
+    });
+  }, [
+    expenses,
+    paymentSourceFilter,
+    paymentStatusFilter,
+    searchQuery,
+    selectedCategoryId,
+    typeFilter,
+  ]);
+  const filteredAdvancedExpenses = useMemo(() => {
+    return advancedExpenses.filter((expense) => {
+      const matchesSearch = matchesSearchFilter(expense, searchQuery);
+      const matchesType = matchesTypeFilter(expense, typeFilter);
+      const matchesPaymentSource = matchesPaymentSourceFilter(
+        expense,
+        paymentSourceFilter,
+      );
+      const matchesCategory = matchesCategoryFilter(
+        expense,
+        selectedCategoryId,
+      );
+      const matchesPaymentStatus = matchesPaymentStatusFilter(
+        expense,
+        paymentStatusFilter,
+      );
+
+      return (
+        matchesSearch &&
+        matchesType &&
+        matchesPaymentSource &&
+        matchesCategory &&
+        matchesPaymentStatus
+      );
+    });
+  }, [
+    advancedExpenses,
+    paymentSourceFilter,
+    paymentStatusFilter,
+    searchQuery,
+    selectedCategoryId,
+    typeFilter,
+  ]);
+  const filteredEffectiveExpenses = useMemo(() => {
+    return effectiveExpenses.filter((expense) => {
+      const matchesSearch = matchesSearchFilter(expense, searchQuery);
+      const matchesType = matchesTypeFilter(expense, typeFilter);
+      const matchesPaymentSource = matchesPaymentSourceFilter(
+        expense,
+        paymentSourceFilter,
+      );
+      const matchesCategory = matchesCategoryFilter(
+        expense,
+        selectedCategoryId,
+      );
+      const matchesPaymentStatus = matchesPaymentStatusFilter(
+        expense,
+        paymentStatusFilter,
+      );
+
+      return (
+        matchesSearch &&
+        matchesType &&
+        matchesPaymentSource &&
+        matchesCategory &&
+        matchesPaymentStatus
+      );
+    });
+  }, [
+    effectiveExpenses,
+    paymentSourceFilter,
+    paymentStatusFilter,
+    searchQuery,
+    selectedCategoryId,
+    typeFilter,
+  ]);
+
+  const totalAmount = filteredEffectiveExpenses.reduce(
+    (total, expense) => total + expense.amount,
+    0,
+  );
+  const totalsAvailable = !isLoading && (!error || expenses.length > 0 || effectiveExpenses.length > 0);
+  const isPaymentStatusConfirming =
+    paymentStatusTarget?.id === paymentStatusUpdatingId;
+  const isAdvanceStatusSubmitting =
+    advanceTarget?.id === advanceStatusUpdatingId ||
+    undoAdvanceTarget?.id === advanceStatusUpdatingId;
+
+  function openCreateDialog() {
+    setFormExpense(null);
+    setFormMode("create");
+  }
+
+  function openEditDialog(expense: Expense) {
+    setFormExpense(expense);
+    setFormMode("edit");
+  }
+
+  function closeFormDialog() {
+    closeComposer();
+    setFormExpense(null);
+    setFormMode(null);
+  }
+
+  function refreshExpenses() {
+    closeFormDialog();
+    setDeleteTarget(null);
+    void loadInitialData(month, year);
+  }
+
+  function refreshExpenseList() {
+    void loadInitialData(month, year);
+  }
+
+  function togglePaymentStatus(expense: Expense) {
+    setPaymentStatusTarget(expense);
+  }
+
+  function goToScheduledExpense(expense: Expense) {
+    const scheduledMonth = getExpenseMonthReference(expense);
+
+    if (!scheduledMonth) {
+      return;
+    }
+
+    setHighlightedExpenseId(expense.id);
+    setPaymentSourceFilter("Todas");
+    setPaymentStatusFilter("Todas");
+    setSearchQuery("");
+    setSelectedCategoryId("Todas");
+    setTypeFilter("Todas");
+    setSelectedDate(scheduledMonth);
+  }
+
+  function confirmPaymentStatusChange() {
+    if (!paymentStatusTarget) {
+      return;
+    }
+
+    void updatePaymentStatus(
+      paymentStatusTarget.id,
+      !paymentStatusTarget.is_paid,
+    )
+      .then(() => setPaymentStatusTarget(null))
+      .catch(() => {});
+  }
+
+  function confirmAdvance(advancedAt: string) {
+    if (!advanceTarget) {
+      return;
+    }
+
+    void updateAdvanceStatus(advanceTarget.id, true, advancedAt)
+      .then(() => {
+        setAdvanceTarget(null);
+        refreshExpenseList();
+      })
+      .catch(() => {});
+  }
+
+  function confirmUndoAdvance() {
+    if (!undoAdvanceTarget || isAdvanceStatusSubmitting) {
+      return;
+    }
+
+    void updateAdvanceStatus(undoAdvanceTarget.id, false)
+      .then(() => {
+        setUndoAdvanceTarget(null);
+        setAdvanceTarget(null);
+        refreshExpenseList();
+      })
+      .catch(() => {});
+  }
+
+  return (
+    <>
+      <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+        <ExpenseListControls
+          month={month}
+          year={year}
+          onMonthChange={setSelectedDate}
+          total={totalsAvailable ? totalAmount : null}
+          count={totalsAvailable ? filteredExpenses.length : null}
+          search={searchQuery}
+          onSearchChange={setSearchQuery}
+          type={typeFilter}
+          onTypeChange={setTypeFilter}
+          filters={{ category: selectedCategoryId, source: paymentSourceFilter, status: paymentStatusFilter }}
+          categories={categories}
+          availableCategoryIds={new Set(expenses.flatMap((expense) => expense.category_id == null ? [] : [expense.category_id]))}
+          onFiltersChange={({ category, source, status }) => {
+            setSelectedCategoryId(category);
+            setPaymentSourceFilter(source);
+            setPaymentStatusFilter(status);
+          }}
+        />
+        <div className="hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:block">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1.05fr)_minmax(0,0.95fr)_auto] xl:items-center">
+            <DropdownSelect
+              ariaLabel="Filtrar por tipo"
+              icon={ReceiptText}
+              onChange={setTypeFilter}
+              options={typeFilterOptions}
+              value={typeFilter}
+            />
+
+            <DropdownSelect
+              ariaLabel="Filtrar por origem"
+              icon={WalletCards}
+              onChange={setPaymentSourceFilter}
+              options={paymentSourceFilterOptions}
+              value={paymentSourceFilter}
+            />
+
+            <DropdownSelect
+              ariaLabel="Filtrar por categoria"
+              className="min-w-0 lg:col-span-1"
+              icon={ListFilter}
+              onChange={setSelectedCategoryId}
+              options={[
+                { label: "Todas categorias", value: "Todas" },
+                ...categories.map((category) => ({
+                  label: category.name,
+                  value: String(category.id),
+                })),
+              ]}
+              value={selectedCategoryId}
+            />
+
+            <DropdownSelect
+              ariaLabel="Filtrar por status de pagamento"
+              className="min-w-0 lg:col-span-1"
+              icon={CheckCircle2}
+              onChange={setPaymentStatusFilter}
+              options={paymentStatusFilterOptions}
+              value={paymentStatusFilter}
+            />
+
+            <div className="relative col-span-2 lg:col-span-1">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                size={17}
+              />
+              <input
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-950/50 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-blue-500 dark:focus:bg-slate-950 dark:focus:ring-blue-950/60"
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Buscar..."
+                value={searchQuery}
+              />
+            </div>
+
+            <Button
+              className="hidden rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:text-slate-950 dark:hover:bg-blue-400 sm:col-span-2 sm:inline-flex lg:col-span-1 lg:w-32"
+              onClick={openCreateDialog}
+              size="sm"
+              type="button"
+            >
+              <Plus aria-hidden="true" size={16} />
+              Nova despesa
+            </Button>
+          </div>
+        </div>
+
+        <div className="hidden justify-center sm:flex">
+          <MonthSwitcher
+            className="border-transparent bg-transparent shadow-none dark:border-transparent dark:bg-transparent"
+            month={month}
+            onChange={setSelectedDate}
+            year={year}
+          />
+        </div>
+
+        <div className="hidden flex-wrap items-center justify-between gap-3 py-1 sm:flex sm:rounded-2xl sm:border sm:border-slate-200 sm:bg-white sm:px-5 sm:py-4 sm:shadow-sm sm:dark:border-slate-800 sm:dark:bg-slate-900">
+          <div className="flex items-center gap-3">
+            <div className="hidden h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300 sm:flex">
+              <FileText aria-hidden="true" size={22} />
+            </div>
+            <div>
+              <p className="hidden text-xs font-medium text-slate-500 dark:text-slate-400 sm:block">
+                Exibindo
+              </p>
+              <strong className="text-base font-semibold text-slate-950 dark:text-slate-50">
+                {filteredExpenses.length} despesas
+              </strong>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-right">
+            <CalendarDays
+              aria-hidden="true"
+              className="text-slate-400"
+              size={18}
+            />
+            <div>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{expenseTotalLabel(typeFilter)}</p>
+              <strong className="text-lg font-semibold text-slate-950 dark:text-white">
+                {totalsAvailable ? <FinancialValue value={totalAmount} /> : "—"}
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        {error ? <Alert variant="error">{error}</Alert> : null}
+
+        {!isLoading && filteredAdvancedExpenses.length ? (
+          <section className="overflow-hidden rounded-xl border border-amber-200/80 bg-white shadow-sm dark:border-amber-900/70 dark:bg-slate-900">
+            <div className="flex items-start gap-3 px-4 py-3 dark:bg-amber-950/10">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                <CalendarClock aria-hidden="true" size={16} />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Impactam o planejamento deste mês
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  {filteredAdvancedExpenses.length === 1
+                    ? "Uma despesa prevista para outro mês foi adiantada."
+                    : `${filteredAdvancedExpenses.length} despesas previstas para outros meses foram adiantadas.`}
+                </p>
+              </div>
+            </div>
+
+            <div className="divide-y divide-slate-200 dark:divide-slate-800">
+              {filteredAdvancedExpenses.map((expense) => (
+                <button
+                  aria-label={`Ir para a despesa ${expense.description} no mês previsto`}
+                  className="flex w-full cursor-pointer flex-col gap-1.5 px-4 py-3 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400 dark:hover:bg-slate-800/50 sm:flex-row sm:items-center sm:justify-between"
+                  key={expense.id}
+                  onClick={() => goToScheduledExpense(expense)}
+                  type="button"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-950 dark:text-slate-50">
+                      {expense.description}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                      Prevista para {formatExpenseFullDate(expense.date)} ·
+                      Considerada em{" "}
+                      {formatExpenseFullDate(expense.advanced_at ?? "")}
+                    </p>
+                  </div>
+                  <strong className="shrink-0 text-sm font-semibold text-slate-950 dark:text-white">
+                    <FinancialValue prefix="- " value={expense.amount} />
+                  </strong>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {isLoading ? <ExpensesSkeleton /> : null}
+
+        {!isLoading &&
+        !filteredExpenses.length &&
+        !filteredAdvancedExpenses.length ? (
+          <div className="rounded-[1.35rem] border border-slate-200 bg-white px-6 py-10 text-center dark:border-slate-800 dark:bg-slate-900">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300">
+              <ReceiptText aria-hidden="true" size={28} />
+            </div>
+            <h2 className="mt-4 text-lg font-semibold text-slate-950 dark:text-slate-50">
+              Nenhuma despesa encontrada
+            </h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              Ajuste os filtros ou cadastre uma nova despesa para este mês.
+            </p>
+          </div>
+        ) : null}
+
+        {!isLoading && filteredExpenses.length ? (
+          <div className="space-y-2.5">
+            {filteredExpenses.map((expense) => (
+              <ExpenseCard
+                categoryName={getCategoryName(expense, categoriesById)}
+                expense={expense}
+                isAdvanceStatusUpdating={advanceStatusUpdatingId === expense.id}
+                isHighlighted={highlightedExpenseId === expense.id}
+                key={expense.id}
+                onAdvance={setAdvanceTarget}
+                onDelete={setDeleteTarget}
+                onEdit={openEditDialog}
+                onTogglePaid={togglePaymentStatus}
+                onView={setDetailsTarget}
+                isPaymentStatusUpdating={paymentStatusUpdatingId === expense.id}
+              />
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      <button
+        aria-label="Nova despesa"
+        className="hidden"
+        onClick={openCreateDialog}
+        type="button"
+      >
+        <Plus aria-hidden="true" size={30} strokeWidth={2.4} />
+      </button>
+
+      <AppNotification key={message} message={message} />
+
+      <ConfirmationDialog
+        confirmLabel={
+          paymentStatusTarget?.is_paid ? "Sim, desmarcar" : "Sim, marcar"
+        }
+        description={
+          paymentStatusTarget?.is_paid
+            ? `A despesa “${paymentStatusTarget.description}” voltará a aparecer como pendente.`
+            : `A despesa “${paymentStatusTarget?.description ?? ""}” será marcada como paga.`
+        }
+        isOpen={Boolean(paymentStatusTarget)}
+        isSubmitting={isPaymentStatusConfirming}
+        onClose={() => setPaymentStatusTarget(null)}
+        onConfirm={confirmPaymentStatusChange}
+        title={
+          paymentStatusTarget?.is_paid
+            ? "Desmarcar como paga?"
+            : "Marcar como paga?"
+        }
+      />
+
+      <ConfirmationDialog
+        confirmLabel="Sim, desfazer"
+        description={`A despesa “${undoAdvanceTarget?.description ?? ""}” voltará a impactar o planejamento na data prevista (${undoAdvanceTarget ? formatExpenseFullDate(undoAdvanceTarget.date) : ""}). O status de pagamento não será alterado.`}
+        isOpen={Boolean(undoAdvanceTarget)}
+        isSubmitting={isAdvanceStatusSubmitting}
+        onClose={() => setUndoAdvanceTarget(null)}
+        onConfirm={confirmUndoAdvance}
+        title="Desfazer adiantamento?"
+      />
+
+      <ExpenseAdvanceDialog
+        expense={undoAdvanceTarget ? null : advanceTarget}
+        isSubmitting={isAdvanceStatusSubmitting}
+        key={advanceTarget?.id ?? "empty-advance-dialog"}
+        onClose={() => setAdvanceTarget(null)}
+        onConfirm={confirmAdvance}
+        onRemoveAdvance={() => {
+          if (advanceTarget?.is_advanced && !isAdvanceStatusSubmitting) {
+            setUndoAdvanceTarget(advanceTarget);
+          }
+        }}
+      />
+
+      <ExpenseFormDialog
+        expense={isComposerOpen ? null : formExpense}
+        mode={isComposerOpen ? "create" : formMode}
+        month={month}
+        onClose={closeFormDialog}
+        onSuccess={refreshExpenses}
+        year={year}
+      />
+
+      <ExpenseDeleteDialog
+        expense={deleteTarget}
+        key={deleteTarget?.id ?? "empty-delete-dialog"}
+        onClose={() => setDeleteTarget(null)}
+        onSuccess={refreshExpenses}
+      />
+
+      <ExpenseDetailsDialog
+        categoryName={
+          detailsTarget ? getCategoryName(detailsTarget, categoriesById) : ""
+        }
+        expense={detailsTarget}
+        key={detailsTarget?.id ?? "empty-details-dialog"}
+        onClose={() => setDetailsTarget(null)}
+      />
+    </>
+  );
+}

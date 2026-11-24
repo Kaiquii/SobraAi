@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand: #1877f2;
+  --color-brand-hover: #1064d3;
+}
+
+.dark {
+  --background: #020617;
+  --foreground: #f8fafc;
+  color-scheme: dark;
+}
+
+html {
+  background: var(--background);
+  min-height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: 0;
+  scrollbar-color: #64748b #0f172a;
+  scrollbar-width: thin;
+}
+
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]), textarea {
+    font-size: 16px;
+  }
+
+  [role="dialog"] {
+    overscroll-behavior: contain;
+  }
+
+  .mobile-compact-dialog {
+    width: 100%;
+    max-width: min(360px, calc(100vw - 48px));
+    max-height: calc(100dvh - 48px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    border-radius: 28px;
+    padding: 24px;
+  }
+
+  .mobile-compact-dialog-actions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  .mobile-compact-dialog-actions > button {
+    min-height: 48px;
+    max-width: 100%;
+  }
+}
+
+@layer base {
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+* {
+  scrollbar-color: #64748b transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: #475569;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.modal-panel-sheet {
+  top: calc(var(--panel-top, 0px) + env(safe-area-inset-top) + 12px);
+  bottom: auto;
+  left: 0;
+  right: 0;
+  margin-top: 0;
+  width: 100%;
+  max-width: 640px;
+  max-height: calc(var(--panel-height, 100dvh) - env(safe-area-inset-top) - 12px);
+  border-radius: 28px 28px 0 0;
+  position: fixed;
+  transform: translateY(max(0px, calc(var(--panel-height, 100dvh) - env(safe-area-inset-top) - 12px - 100%)));
+}
+
+@media (min-width: 640px) {
+  .modal-panel-sheet {
+    top: var(--panel-top, 0px);
+    bottom: var(--panel-bottom, 0px);
+    margin-block: auto;
+    width: calc(100% - 32px);
+    max-width: 28rem;
+    max-height: calc(var(--panel-height, 100dvh) - 48px);
+    border-radius: 8px;
+    transform: none;
+  }
+}
+
+@media (max-height: 360px) {
+  .patrimony-category-help { display: none; }
+}

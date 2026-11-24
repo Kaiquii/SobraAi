@@ -1,0 +1,9 @@
+$Host.UI.RawUI.WindowTitle = 'SobraAi - Autenticacao Apple'
+Write-Host 'Entre com sua conta Apple SECUNDARIA para assinar o SobraAi.'
+Write-Host 'Digite senha e codigo de verificacao somente nesta janela.'
+& 'C:\Users\kaiqu\AppData\Local\SobraAiTools\xcross-2.1.3-sobraai\bin\xcross.exe' auth
+if ($LASTEXITCODE -eq 0) {
+  Write-Host 'Autenticacao concluida. Volte ao Codex.' -ForegroundColor Green
+} else {
+  Write-Host 'Autenticacao nao concluida. Informe ao Codex a mensagem exibida, sem dados de acesso.' -ForegroundColor Yellow
+}

@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #eef3f8;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --muted: #64748b;
+  --border: #cbd5e1;
+  --primary: #00a878;
+  --primary-strong: #008f67;
+  --scrollbar-thumb: #94a3b8;
+  --scrollbar-thumb-hover: #64748b;
+  --scrollbar-track: #e2e8f0;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --font-sans: Arial, Helvetica, sans-serif;
+}
+
+.dark {
+  --background: #07111f;
+  --foreground: #f8fafc;
+  --surface: #0f1b2d;
+  --muted: #94a3b8;
+  --border: #334155;
+  --primary: #34d399;
+  --primary-strong: #10b981;
+  --scrollbar-thumb: #475569;
+  --scrollbar-thumb-hover: #64748b;
+  --scrollbar-track: #111827;
+}
+
+* {
+  box-sizing: border-box;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 40px;
+  border: 2px solid var(--scrollbar-track);
+  border-radius: 9999px;
+  background: var(--scrollbar-thumb);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+*::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}
+
+html {
+  min-width: 320px;
+  background: var(--background);
+}
+
+@media (min-width: 1024px) {
+  html.admin-desktop-no-scroll,
+  html.admin-desktop-no-scroll body {
+    overflow: hidden;
+  }
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+button[data-dropdown-control]:not(:disabled) {
+  cursor: default;
+}
+
+::selection {
+  background: #a7f3d0;
+  color: #052e2b;
+}
+
+.dark ::selection {
+  background: #047857;
+  color: #ecfdf5;
+}
+
+input::-ms-clear,
+input::-ms-reveal {
+  display: none;
+}
+
+input[type="password"]::-webkit-contacts-auto-fill-button,
+input[type="password"]::-webkit-credentials-auto-fill-button {
+  display: none !important;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+input[type="search"]::-webkit-search-cancel-button {
+  display: none;
+}
+
+.auth-grid {
+  background-color: rgb(248 250 252 / 0.72);
+  background-image:
+    linear-gradient(rgb(148 163 184 / 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(148 163 184 / 0.1) 1px, transparent 1px),
+    radial-gradient(circle at 0 0, rgb(45 212 191 / 0.16), transparent 34%),
+    radial-gradient(circle at 100% 0, rgb(96 165 250 / 0.12), transparent 38%);
+  background-size: 32px 32px, 32px 32px, 100% 100%, 100% 100%;
+}
+
+.dark .auth-grid {
+  background-color: rgb(15 23 42 / 0.88);
+  background-image:
+    linear-gradient(rgb(100 116 139 / 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(100 116 139 / 0.14) 1px, transparent 1px),
+    radial-gradient(circle at 0 0, rgb(16 185 129 / 0.18), transparent 34%),
+    radial-gradient(circle at 100% 0, rgb(59 130 246 / 0.14), transparent 38%);
+}

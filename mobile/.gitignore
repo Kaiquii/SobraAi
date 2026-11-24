@@ -1,0 +1,37 @@
+# IDEs e arquivos locais
+*.iml
+.idea/
+.DS_Store
+local.properties
+
+# Gradle, Kotlin e builds de todos os modulos
+.gradle/
+.kotlin/
+build/
+.externalNativeBuild/
+.cxx/
+/captures/
+
+# Configuracao privada e saidas Apple
+/iosApp/Configuration/Local.xcconfig
+xcuserdata/
+DerivedData/
+*.xcarchive/
+*.dSYM/
+*.ipa
+*.xip
+
+# Pacotes Android gerados, inclusive fora de build/
+*.apk
+*.aab
+
+# Chaves privadas e perfis de assinatura
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.p8
+*.mobileprovision
+
+# Logs locais da ferramenta de instalacao/renovacao
+sideloadly*.log

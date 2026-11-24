@@ -1,0 +1,527 @@
+package com.example.appfinanceiro.core.designsystem.components
+
+import com.example.appfinanceiro.core.network.supportsExpenseAdvance
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.EventAvailable
+import androidx.compose.material.icons.filled.EventRepeat
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.appfinanceiro.core.designsystem.theme.DangerRed
+import com.example.appfinanceiro.core.designsystem.theme.GreenPositive
+import com.example.appfinanceiro.core.designsystem.theme.PrimaryBlue
+import com.example.appfinanceiro.core.designsystem.theme.TextMuted
+
+enum class ExpenseCardStyle {
+    Compact,
+    Detailed
+}
+
+@Composable
+fun ExpenseCard(
+    style: ExpenseCardStyle,
+    title: String,
+    categoryName: String,
+    paymentSource: String,
+    type: String,
+    date: String,
+    value: String,
+    isPaid: Boolean = false,
+    isAdvanced: Boolean = false,
+    advancedLabel: String? = null,
+    showDate: Boolean = true,
+    onView: () -> Unit,
+    onEdit: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
+    onPaymentStatusClick: (() -> Unit)? = null,
+    expenseType: String,
+    onAdvanceClick: (() -> Unit)? = null,
+    notes: String? = null
+) {
+    val typeAccent = expenseTypeStyle(expenseType).accent()
+    when (style) {
+        ExpenseCardStyle.Compact -> CompactExpenseCard(
+            typeAccent = typeAccent,
+            title = title,
+            categoryName = categoryName,
+            paymentSource = paymentSource,
+            type = type,
+            date = date,
+            value = value,
+            isPaid = isPaid,
+            isAdvanced = isAdvanced,
+            advancedLabel = advancedLabel,
+            showDate = showDate,
+            hasNotes = !notes.isNullOrBlank(),
+            onView = onView
+        )
+
+        ExpenseCardStyle.Detailed -> DetailedExpenseCard(
+            typeAccent = typeAccent,
+            title = title,
+            categoryName = categoryName,
+            paymentSource = paymentSource,
+            type = type,
+            date = date,
+            value = value,
+            isPaid = isPaid,
+            isAdvanced = isAdvanced,
+            advancedLabel = advancedLabel,
+            showDate = showDate,
+            hasNotes = !notes.isNullOrBlank(),
+            onView = onView,
+            onEdit = onEdit ?: {},
+            onDelete = onDelete ?: {},
+            onPaymentStatusClick = onPaymentStatusClick,
+            onAdvanceClick = onAdvanceClick.takeIf { supportsExpenseAdvance(expenseType) }
+        )
+    }
+}
+
+@Composable
+private fun CompactExpenseCard(
+    typeAccent: Color,
+    title: String,
+    categoryName: String,
+    paymentSource: String,
+    type: String,
+    date: String,
+    value: String,
+    isPaid: Boolean,
+    isAdvanced: Boolean,
+    advancedLabel: String?,
+    showDate: Boolean,
+    hasNotes: Boolean,
+    onView: () -> Unit
+) {
+    val textColor = MaterialTheme.colorScheme.onBackground
+    val cardBg = MaterialTheme.colorScheme.surface
+    val sourceColor = paymentSourceColor(paymentSource)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(cardBg, RoundedCornerShape(12.dp))
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = textColor,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = categoryName,
+                color = TextMuted,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MiniChip(label = type, color = typeAccent)
+                    if (isPaid) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        MiniChip(label = "Paga", color = GreenPositive)
+                    }
+                    if (isAdvanced) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        CompactAdvanceIndicator(label = advancedLabel)
+                    }
+                    if (showDate) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = date,
+                            color = TextMuted,
+                            fontSize = 10.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
+                if (hasNotes) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    ExpenseNoteIndicatorIcon()
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Column(horizontalAlignment = Alignment.End) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FinancialValue(
+                    text = value,
+                    color = textColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clickable { onView() }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Visibility,
+                        contentDescription = "Visualizar despesa",
+                        tint = TextMuted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .background(sourceColor.copy(alpha = 0.14f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 7.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccountBalanceWallet,
+                    contentDescription = "Fonte",
+                    tint = sourceColor,
+                    modifier = Modifier.size(11.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = paymentSource,
+                    color = sourceColor,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailedExpenseCard(
+    typeAccent: Color,
+    title: String,
+    categoryName: String,
+    paymentSource: String,
+    type: String,
+    date: String,
+    value: String,
+    isPaid: Boolean,
+    isAdvanced: Boolean,
+    advancedLabel: String?,
+    showDate: Boolean,
+    hasNotes: Boolean,
+    onView: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onPaymentStatusClick: (() -> Unit)?,
+    onAdvanceClick: (() -> Unit)?
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val cardBg = colorScheme.surface
+    val titleColor = colorScheme.onSurface
+    val secondaryColor = colorScheme.onSurfaceVariant
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = cardBg
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = titleColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = categoryName,
+                    color = secondaryColor,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .background(typeAccent.copy(alpha = 0.10f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(text = type, color = typeAccent, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        if (isAdvanced) {
+                            Spacer(modifier = Modifier.width(5.dp))
+                            CompactAdvanceIndicator(label = advancedLabel)
+                        }
+                        if (showDate) {
+                            Text(
+                                text = " • $date",
+                                color = secondaryColor,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .padding(start = 8.dp)
+                            )
+                        }
+                    }
+                    if (hasNotes) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        ExpenseNoteIndicatorIcon()
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Column(
+                modifier = Modifier.width(if (onAdvanceClick != null) 148.dp else 120.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    onPaymentStatusClick?.let { onClick ->
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .then(
+                                    if (isPaid) {
+                                        Modifier.background(GreenPositive, CircleShape)
+                                    } else {
+                                        Modifier
+                                            .border(
+                                                width = 1.dp,
+                                                color = secondaryColor.copy(alpha = 0.7f),
+                                                shape = CircleShape
+                                            )
+                                            .background(
+                                                secondaryColor.copy(alpha = 0.08f),
+                                                CircleShape
+                                            )
+                                    }
+                                )
+                                .clickable { onClick() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = if (isPaid) {
+                                    "Desmarcar despesa como paga"
+                                } else {
+                                    "Marcar despesa como paga"
+                                },
+                                tint = if (isPaid) Color.White else secondaryColor,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                    }
+                    onAdvanceClick?.let { onClick ->
+                        Icon(
+                            imageVector = if (isAdvanced) Icons.Default.EventAvailable else Icons.Default.EventRepeat,
+                            contentDescription = if (isAdvanced) "Alterar data do adiantamento" else "Adiantar despesa",
+                            tint = PrimaryBlue,
+                            modifier = Modifier.size(18.dp).clickable { onClick() }
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable { onView() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "Visualizar despesa",
+                            tint = secondaryColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Editar",
+                        tint = PrimaryBlue,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable { onEdit() }
+                    )
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Deletar",
+                        tint = DangerRed,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable { onDelete() }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                FinancialValue(
+                    text = value,
+                    color = titleColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.AccountBalanceWallet,
+                        contentDescription = null,
+                        tint = PrimaryBlue,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = paymentSource,
+                        color = secondaryColor,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpenseNoteIndicatorIcon() {
+    Box(
+        modifier = Modifier
+            .background(PrimaryBlue.copy(alpha = 0.10f), RoundedCornerShape(6.dp))
+            .padding(4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Description,
+            contentDescription = "Tem observações",
+            tint = PrimaryBlue,
+            modifier = Modifier.size(12.dp)
+        )
+    }
+}
+
+@Composable
+private fun MiniChip(label: String, color: Color) {
+    Box(
+        modifier = Modifier
+            .background(color.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = label,
+            color = color,
+            fontSize = 10.sp,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun CompactAdvanceIndicator(label: String?) {
+    Row(
+        modifier = Modifier
+            .background(PrimaryBlue.copy(alpha = 0.14f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 5.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.EventAvailable,
+            contentDescription = label ?: "Despesa adiantada",
+            tint = PrimaryBlue,
+            modifier = Modifier.size(11.dp)
+        )
+        Text(
+            text = "Adiantada",
+            color = PrimaryBlue,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private fun paymentSourceColor(paymentSource: String): Color {
+    return when {
+        paymentSource.contains("dividido", ignoreCase = true) -> PrimaryBlue
+        paymentSource.equals("Salario", ignoreCase = true) ||
+            paymentSource.equals("Salário", ignoreCase = true) -> PrimaryBlue
+
+        paymentSource.equals("Adiantamento", ignoreCase = true) -> Color(0xFF8B5CF6)
+        paymentSource.equals("Renda Extra", ignoreCase = true) -> GreenPositive
+        else -> TextMuted
+    }
+}

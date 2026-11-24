@@ -1,0 +1,24 @@
+export type MonthlySummary = {
+  exclude_va_from_available?: boolean;
+  exclude_vr_from_available?: boolean;
+  va?: number;
+  vr?: number;
+  total_gasto_va?: number;
+  total_gasto_vr?: number;
+  restante_va?: number;
+  restante_vr?: number;
+  adiantamento: number;
+  month: number;
+  renda_extra_amt: number;
+  restante_adiantamento: number;
+  restante_renda_extra: number;
+  restante_salario: number;
+  salario: number;
+  total_expense: number;
+  total_gasto_adiantamento?: number;
+  total_gasto_renda_extra?: number;
+  total_gasto_salario?: number;
+  total_geral_disponivel: number;
+  total_income: number;
+  year: number;
+};

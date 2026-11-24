@@ -1,0 +1,37 @@
+import 'dart:io';
+import 'package:dart_mobile_device/shared/device/models/device.dart';
+import 'package:xcross/src/composition/native_runtime.dart';
+import 'package:xcross/src/target/iphone/device/device_backend.dart';
+Future<void> main() async {
+  var code = 1;
+  try {
+    final context = createNativeXcrossContext();
+    final app = await context.load();
+    final runtime = app.runtime;
+    final backend = await DeviceBackend.resolve(
+      app.pymd,
+      hostServices: runtime.appleHostServices,
+      createNativeLibraryLoader: runtime.createNativeLibraryLoader,
+      httpClients: runtime.signingHttpClients,
+    );
+    final device = await backend.resolveDevice(mode: DeviceSearchMode.usb);
+    stdout.writeln('USB device selected. Signing and installing SobraAi...');
+    final state = Directory(r'C:\Users\kaiqu\AppData\Local\SobraAiTools\install-state')..createSync(recursive: true);
+    final bundleId = await backend.install(
+      r'C:\Users\kaiqu\Documents\SobraAi Unificado\mobile\build\xcross-ios\SobraAi.app',
+      device: device,
+      bundleId: 'br.com.sobraai.app.ios',
+      projectRoot: state.path,
+    );
+    File('${state.path}/installed-bundle-id.txt').writeAsStringSync(bundleId);
+    File('${state.path}/device-id.txt').writeAsStringSync(device.udid);
+    stdout.writeln('INSTALL_COMPLETED');
+    code = 0;
+  } catch (error) {
+    stderr.writeln('Installation failed: $error');
+  }
+  await stdout.flush();
+  await stderr.flush();
+  exit(code);
+}
+

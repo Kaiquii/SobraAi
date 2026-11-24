@@ -1,0 +1,351 @@
+# Regras de Front-end
+
+Estas regras devem ser consideradas em toda mudança visual do SobraAi,
+projeto Kotlin Multiplatform para Android e iPhone. Aplicam-se às telas Android
+compartilhadas em `sharedUi` e aos adaptadores dos dois hosts. Consulte também a
+[política KMP](../rules.md) e o [harness](test-harness.md).
+
+## Compatibilidade Android e iPhone
+
+- **A interface deve ser igual nas duas plataformas, com fidelidade integral ao
+  front-end Android de referência.** Funcionalidade equivalente com outro layout
+  não atende. Todas as telas, navegação e apresentação ficam em
+  `sharedUi/src/commonMain/`; os componentes ficam em `designSystem/src/commonMain/`.
+  Ambos os hosts abrem `SobraAiApp(services)`. Não manter cópias independentes
+  de telas ou ViewModels, nem uma segunda navegação para iOS.
+  Diferenças nativas e critérios de conferência:
+  [interface única](../rules.md#interface-única-android-e-ios-devem-ser-visualmente-iguais).
+
+- Toda mudança visual ou de interação deve considerar as duas plataformas e os
+  consumidores afetados. Preserve o front-end Android existente; uma adaptação
+  iOS não autoriza alterações incidentais em suas telas, recursos ou navegação.
+- Código comum deve usar APIs e recursos de Compose Multiplatform compatíveis
+  com Android e os targets Apple. Isole serviços de plataforma em adaptadores;
+  não importe APIs Android/JVM em `sharedUi/commonMain`.
+- Confira teclado, áreas seguras de notch/indicador de início, navegação/voltar,
+  rotação e fonte ampliada no iPhone, além das variações de tela Android.
+  Acessibilidade inclui TalkBack e VoiceOver; ocultar valores também deve removê-los
+  das semânticas nas duas plataformas.
+- Biometria, fotos, arquivos, voz e permissões exigem tratamento nativo de
+  cancelamento, indisponibilidade e segundo plano. Não presumir que o comportamento
+  de um serviço Android existe de forma idêntica no iOS.
+- Use `harnessVerify` para a verificação local Android/KMP. Sem execução em
+  iPhone, registre a validação visual Apple pendente; não declare aprovação por
+  compilar KLIB. O usuário conduz os testes manuais e prepara os dispositivos.
+
+## Validação do build de produção
+
+- No iOS, validar build/link Swift e Kotlin no Xcode, assinatura/provisionamento
+  e o candidato no iPhone/TestFlight antes de distribuição. Sucesso do APK/AAB,
+  dos testes JVM ou do KLIB não certifica o app Apple. O build comum de validação
+  não autoriza gerar/publicar uma release em nenhuma loja.
+- Nunca considerar o funcionamento do build `debug` como validação suficiente do aplicativo publicado. O build `release` usa R8 e precisa ser validado separadamente.
+- Manter redução de código, otimização, ofuscação e redução de recursos habilitadas no `release`. Contratos acessados por reflexão devem possuir regras de preservação específicas e revisadas.
+- Antes de gerar uma versão para a Play Console, executar o lint de release, todos os testes automatizados e a geração do AAB sem erros.
+- Antes de promover uma versão para produção, instalar pela faixa de teste da Google Play o mesmo AAB que será promovido e validar os fluxos principais, integrações externas, persistência local, arquivos e comportamento offline.
+- Não enviar uma versão diretamente para produção com base apenas em testes pelo Android Studio ou em APK instalado manualmente.
+
+## Responsividade e acessibilidade
+
+- Toda implementação visual deve considerar celulares com diferentes tamanhos, proporções e densidades de tela. O layout precisa se adaptar corretamente a telas compactas, convencionais e grandes, incluindo aparelhos dobráveis e uso em modo de tela dividida.
+- Não assumir uma largura fixa disponível. Componentes, indicadores, diálogos, cards e áreas de navegação devem respeitar os limites do contêiner, manter margens mínimas e encolher, reorganizar ou permitir rolagem quando o espaço for reduzido.
+- Antes de concluir uma mudança visual, conferir o comportamento em diferentes larguras de viewport e com os ajustes de tamanho da interface e da fonte aumentados. Nenhum elemento pode encostar indevidamente nas bordas, sobrepor outro conteúdo, ficar cortado ou perder sua área mínima de toque.
+- Sempre considerar celulares com telas pequenas e estreitas, além de fontes maiores e teclado aberto.
+- Os títulos das barras superiores ficam alinhados à esquerda (`TopAppBar`),
+  inclusive Despesas Mensais, com os mesmos botões de voltar e ações de cada tela.
+  Quando houver subtítulo, alinhar também à esquerda. Preservar os cabeçalhos de
+  formulários de autenticação que fazem parte do conteúdo rolável.
+- Em telas com conteúdo extenso, usar rolagem vertical e `imePadding()` para que os campos e botões não fiquem inacessíveis pelo teclado.
+- Criar e editar despesa reservam o teclado no `Scaffold` com `imePadding()`;
+  a coluna rolável recebe uma área já reduzida. Não aplicar o inset novamente
+  nos campos ou rateios. Preservar a rolagem nativa do cursor em Observações,
+  inclusive ao acrescentar linhas, mover a seleção e usar teclado alto.
+- Painéis inferiores usam `AppModalBottomSheet`, do designSystem comum, para
+  proteger o formulário com o teclado aberto: deslizar, tocar na alça, tocar fora
+  ou voltar não devem fechar o painel e descartar o rascunho. Com o teclado
+  fechado, preservar o fechamento por deslize e os demais gestos normais.
+  O “X” e as ações explícitas continuam disponíveis conforme o estado do fluxo;
+  bloqueios de salvamento/exportação impedem o fechamento durante a operação.
+  A regra é a mesma nos editores de FGTS/investimentos, filtros de despesas,
+  exportação e histórico do Assistente; não implementar proteções divergentes
+  em cada consumidor nem desabilitar o arraste permanentemente.
+- O host Android usa `windowSoftInputMode="adjustResize"`: o teclado deve reduzir
+  a área disponível, sem deslocar a janela inteira sobre a barra de status. No
+  Assistente, o Scaffold trata o espaço do teclado uma vez e a lista reposiciona
+  a última mensagem ao reduzir a altura, usando `requestScrollToItem` na medição,
+  sem reiniciar animações de rolagem a cada quadro do teclado. As boas-vindas
+  ficam compactas com pouca altura, mantendo o ícone menor e o conteúdo rolável;
+  o aviso abaixo do campo
+  aparece com o teclado fechado. Conferir abertura/fechamento do teclado,
+  mensagem multilinha e rotação em Android e iPhone; não duplicar `imePadding()`
+  no compositor e na lista.
+- Respeitar áreas seguras do sistema. Ações no topo, como voltar, devem usar `statusBarsPadding()`; ações no rodapé devem respeitar a barra de navegação.
+- No iOS, respeitar também notch e indicador de início. Conferir os insets já aplicados por Scaffold/host para não duplicar espaçamentos ao adaptar componentes comuns.
+- Manter alvos de toque de no mínimo 48 dp, principalmente ícones e ações secundárias.
+- Evitar textos e controles com largura fixa. Preferir `fillMaxWidth()`, espaçamentos adaptáveis e textos que possam quebrar em mais de uma linha.
+
+## Tema claro e escuro
+
+- Tipografia, pesos e métricas são definidos no tema comum com Roboto embutida
+  em `designSystem/src/commonMain/composeResources/font/`. Não usar a fonte
+  padrão diferente de cada sistema para textos do aplicativo.
+
+- Toda nova interface deve ser conferida nos temas claro e escuro antes de ser considerada pronta.
+- Usar `MaterialTheme.colorScheme` e os tokens de tema do projeto para fundo, superfícies, texto e erros; não fixar cores de fundo ou texto que prejudiquem um dos temas.
+- Garantir contraste suficiente para textos, ícones, bordas, estados desabilitados e botões nos dois temas.
+- Todos os modais e diálogos devem seguir o mesmo padrão visual do aplicativo: usar `MaterialTheme.colorScheme.background` como fundo, `onBackground` para título e conteúdo e os tokens do tema para ações. No modo escuro, não usar o fundo acinzentado padrão do Material sem uma decisão visual explícita.
+
+## Apresentação de despesas
+
+- A tela de despesas usa o seletor de mês padrão do aplicativo, resumo azul,
+  busca e chips no cabeçalho comum `ExpenseListControls`; ele rola com a lista para continuar acessível com
+  teclado ou fonte ampliada. O total mantém o período efetivo e os filtros atuais.
+- `ExpenseCard` é compartilhado entre Início e Despesas. Não reservar coluna para
+  o antigo ícone grande de recibo, nem exibir a carta de observações; o conteúdo das
+  observações continua nos detalhes. Restaurar/preservar o pequeno indicador de
+  documento azul na linha de tipo/data quando `notes` tiver conteúdo (não nulo,
+  vazio ou apenas espaços), tanto no Início quanto em Despesas. Não é botão;
+  descrição acessível “Tem observações”. Ícone de 12 dp, padding 4 dp, fundo azul
+  a 10% e raio 6 dp. Metadados podem rolar horizontalmente quando faltar largura,
+  reservando o indicador sem aumentar o card nem deslocar ações.
+- Somente o marcador do tipo usa azul para Única, roxo para Parcelada e verde-água
+  para Fixa, com tons adequados ao tema. Não colorir nem adicionar bordas ao card,
+  preservar a hierarquia de nome, categoria, tipo, valor e origem. `ExpenseTypeStyle`
+  recebe o tipo original da API, separado do rótulo de parcela (`Parc. 3/10`). Não usar origem, categoria
+  ou status de pagamento para escolher essa cor. Manter o texto do tipo: a cor
+  sozinha não identifica a despesa para todos os usuários.
+- Nos cards detalhados de Despesas, preservar o tamanho compacto e as ações no
+  canto superior direito, na mesma linha: pagar, adiantar, visualizar,
+  editar e excluir. O usuário pediu explicitamente essa disposição como na web;
+  não criar uma linha de ações no rodapé nem aumentar a altura dos cards para
+  acrescentar um botão. A referência web orienta somente a posição; manter os
+  ícones e cores do Android: calendário azul com seta para adiantar e calendário
+  com marca de confirmação nas despesas já adiantadas, para alterar a data.
+  Remover adiantamento fica no modal Alterar adiantamento, com botão contornado
+  de largura total e confirmação própria, apenas para despesa já adiantada.
+  Detalhes mantém somente o informativo de estado/data, sem botões de adiantar,
+  alterar data ou remover. Todas essas ações ficam no calendário do card e no
+  modal aberto por ele. Cancelar a
+  confirmação preserva a data editada; sucesso fecha ambos os modais. Conteúdo
+  rolável mantém ações acessíveis em telas baixas/fonte ampliada e a atualização
+  bloqueia os controles. Não alterar Paga como consequência
+  de adiantar ou remover o adiantamento.
+- Adiantamento é permitido somente para Única (incluindo `Unica` legado) e
+  Parcelada. Despesa Fixa não exibe ação de adiantar/alterar/remover adiantamento,
+  nem abre esses diálogos. Usar a regra comum `supportsExpenseAdvance` também
+  antes das mutações; tipos vazios/desconhecidos não ganham permissão. Marcar uma
+  Fixa como paga continua permitido e não muda o gasto de mês. Fonte do pagamento
+  e status Paga não alteram a elegibilidade. A regra vale para todos os cards e
+  detalhes, tanto Android quanto iOS.
+
+## Patrimônio
+
+- Acesso no Início pelo botão flutuante azul somente com ícone de carteira de
+  24 dp, sem texto visível, com área de toque de 48 dp e descrição acessível
+  “Abrir patrimônio”, à direita perto da barra. Preservar o espaço medido na lista.
+  Manter o “+” e as quatro abas
+  existentes; reservar espaço ao fim da lista para não encobrir seu último item.
+- Perfil > Finanças mantém um segundo acesso à mesma tela comum. FGTS e
+  investimentos usam saldos atuais, formulários e confirmação de exclusão; não
+  integrar esses valores ao resumo mensal nem oferecer categoria de despesa.
+- Investimentos usam AppSelectField com IDs e rótulos do catálogo da API, com
+  criação e gerenciamento de categorias pessoais. Categorias padrão mostram
+  proteção, sem ações de renomear/excluir. A categoria criada fica selecionada;
+  alterações recarregam catálogo e patrimônio. Só GET 404 permite o formulário
+  legado por texto enquanto a API de catálogo não estiver publicada. Falhas de
+  autenticação ou conexão não devem ativar esse fallback. Um 404 antigo não deve
+  prender a tela no formulário legado: reabrir a tela/editor deve consultar o
+  catálogo novamente, sem cancelar leitura idêntica em andamento nem criar polling.
+- Resumo e cards compactos, sem título de seção duplicando o card FGTS nem texto
+  introdutório extenso. Toque no card abre a atualização em painel inferior
+  rolável, com botão principal de salvar visível e exclusão com confirmação.
+  Os formulários de FGTS e investimentos usam `AppModalBottomSheet`: com o teclado
+  aberto, preservar o rascunho contra fechamento por gesto, alça, toque fora ou
+  voltar; com o teclado fechado, permitir deslizar para fechar. Preservar a
+  rolagem interna, o “X” e os bloqueios durante o salvamento.
+- Gerenciar categorias mantém título, fechar, descrição e Nova categoria fixos.
+  Apenas a lista de categorias/seções rola; mensagens longas de status têm espaço
+  limitado sem empurrar o cabeçalho para fora da área segura. Em pouca altura,
+  ocultar a descrição opcional para reservar espaço à lista.
+- Respeitar FinancialValue, temas, fonte ampliada, teclado, estados sem conteúdo
+  e erros persistentes. Detalhes e cenários em [patrimonio.md](patrimonio.md).
+
+## Gráfico de gastos por categoria
+
+- `CategoryExpensesCard` apresenta um gráfico de rosca acima da lista existente,
+  no componente comum Android/iOS. Preservar o card, total, legenda, valores e
+  percentuais da API. Fatias e legenda usam a mesma ordem e `categoryColor`.
+- A geometria usa os valores positivos, sem alterar os dados financeiros nem
+  calcular novos totais de negócio a partir do desenho. Lista vazia/zerada não
+  gera fatias fictícias; valores negativos ou não finitos impedem desenhar uma
+  rosca enganosa e mantêm a lista acompanhada de uma indicação de indisponibilidade.
+- Rosca centralizada em área de até 192 dp, com margens para destacar levemente a
+  fatia selecionada e separação sutil entre cores. Toque na fatia abre um balão
+  dentro do card com nome e valor; tocar no centro/espaço externo do gráfico ou no
+  balão fecha o detalhe. As linhas da legenda também abrem a mesma consulta,
+  oferecendo alternativa acessível para fatias pequenas. Limpar seleção ao mudar
+  mês ou dados; o balão não pode mostrar uma categoria do mês anterior.
+- Seleção sincronizada entre fatia e legenda: manter fundo suave e contorno na
+  cor da categoria na linha selecionada, com realce da fatia e atenuação das demais.
+  Tocar novamente na mesma linha/fatia desmarca e remove todos os realces; outra
+  categoria troca a seleção. O realce não pode mudar o tamanho/posição da linha.
+- Legenda compacta: nome, percentual com uma casa decimal e valor na mesma linha,
+  barra abaixo, alvos de toque de 48 dp. Em telas estreitas ou fonte ampliada,
+  permitir valor na linha seguinte sem cortar o nome. Preservar as cores e valores
+  da API; não alterar outros cards. `PrivateReportContent` deve ocultar também o
+  gráfico, o balão e suas semânticas quando a privacidade estiver ativada.
+
+## Textos e idioma
+
+- Configurações de Renda mantém as preferências “Excluir VA do disponível” e
+  “Excluir VR do disponível” como última seção, depois de Renda Extra.
+  Reutilizar `SettingsToggleItem`, com resumo curto e IconButton “?” de ajuda.
+  A explicação completa fica em AlertDialog comum, com corpo rolável, exemplo
+  em SettingsCard, ação Fechar, fundo/cores do tema e raio de 24dp. Abrir/fechar
+  ajuda não salva nada e continua disponível durante leitura/gravação.
+  A explicação informa que vale para todos
+  os meses e somente o restante é excluído; os cartões continuam integrais.
+  Não vincular a preferência ao seletor mensal. Só refletir mudanças após
+  confirmação do servidor, bloqueando controles durante leitura/gravação e
+  mantendo estado confirmado em falha, sem gravar defaults por erro.
+  No Início, a legenda identifica fontes excluídas sem remover o aviso de saldo
+  negativo. Respeitar privacidade, texto multilinha, temas e alvos de 48 dp.
+
+- Dropdowns usam `AppSelectField` e `AppSelectDialog` do designSystem. Usar o
+  mesmo campo e lista de seleção nos formulários, rateios, filtros e relatórios;
+  não reintroduzir menus ancorados que comprimem listas curtas. O modal adapta
+  a largura e a altura à área segura, permite rolagem quando necessário e mantém
+  opções com 48 dp mínimos, sem cortar nomes. Fechar a seleção não aplica uma
+  opção; filtros continuam sujeitos à confirmação no botão Aplicar filtros.
+  A padronização da lista não autoriza redesenhar os controles ao redor: preservar
+  `CustomInput`, `FormLabel`, margens, tipografia e os botões existentes (incluindo
+  o “+” verde dentro do campo Categoria). Usar o slot `anchor` quando necessário
+  para conservar a apresentação original. A busca discreta pertence ao modal,
+  ignora caixa/acentos e filtra os rótulos sem mudar IDs nem aplicar uma seleção.
+  Manter o modal intermediário (largura máxima de 440 dp e cerca de sete opções por
+  vez), com opções em `bodyLarge`, sem ocupar quase toda a tela nem reduzir demais
+  a lista. A altura depende da lista original e do espaço seguro, nunca da quantidade
+  de resultados da busca: digitar não deve encolher/recentralizar a janela.
+  Reservar o espaço do botão de limpar mesmo com a busca vazia e reiniciar a
+  lista no primeiro resultado ao alterar a consulta, sem rolagem animada.
+  O seletor usa um host de janela de tamanho integral, com painel visual limitado
+  e fechamento ao tocar fora. No Android, `selectorDialogProperties` define
+  `decorFitsSystemWindows=false`: os insets animados de Compose são o único dono
+  do deslocamento pelo teclado, evitando pan/redimensionamento concorrente da
+  janela flutuante. O adaptador Apple mantém as propriedades comuns. Não adicionar
+  animação de tamanho ou um segundo `imePadding` por cima da área segura.
+- Manter nomes como “Vale-alimentação (VA)” e “Vale-refeição (VR)”, com acentos e
+  siglas maiúsculas. Nos editores de renda, separar a ação do nome completo com
+  hierarquia tipográfica para evitar um título excessivamente grande.
+
+- Todo texto exibido ao usuário deve estar em português brasileiro, com ortografia, acentuação, concordância e pontuação revisadas.
+- Manter os arquivos de código e recursos em UTF-8; limitações técnicas não justificam remover acentos dos textos da interface.
+- Antes de concluir uma mudança, revisar títulos, botões, campos, mensagens de erro, estados vazios, notificações e descrições de acessibilidade.
+- Não alterar nomes de campos, valores ou mensagens que façam parte do contrato com a API. Quando necessário, adaptar apenas o texto apresentado na interface.
+
+## Modelos do Assistente
+
+- O usuário não escolhe o modelo: o backend é responsável por selecionar e
+  substituir a IA automaticamente. A mesma tela Android/iOS apresenta o SobraAi,
+  sem seletor, nome de modelo, “Recomendado” ou diálogo de informações do modelo.
+  Não recriar essa escolha em outra tela nem incluir nomes/IDs de provedores no app.
+- A abertura e o envio do chat não consultam catálogo nem preferências de modelo
+  e não têm bloqueios ou avisos de reconciliação dessa seleção. Não gravar um
+  reset de preferência ao entrar; preferências legadas precisam ser tratadas pelo
+  backend. O POST mantém mensagem/conversation_id, sem `model_id`.
+- Preservar mensagens, conversa, rascunho, histórico, cota, rolagem e composição
+  do teclado. A troca interna de modelo não deve exigir uma nova conversa do usuário.
+  O backend confirmou a política automática publicada e testada em produção em
+  28/10/2026. Isso não representa previsão de esgotamento por modelo nem substitui
+  a validação visual do aplicativo. Detalhes e
+  tratamento de preferências antigas estão em [assistant-models.md](assistant-models.md).
+- Limites globais e por usuário continuam válidos. Preservar erros `assistant_*`,
+  compatibilidade com erros antigos e espera `retry_after_seconds`; não prometer
+  uso ilimitado nem reenviar o chat automaticamente para tentar outro modelo.
+  Não incluir chave de provedor, catálogo manual ou busca de logos no aplicativo.
+- A emissão inicial não resolvida do coletor de sessão não significa logout.
+  Limpar estado somente ao receber token realmente nulo ou troca de conta;
+  nunca salvar JWT como dono do rascunho em Bundle. O rascunho usa o escopo
+  restaurável da sessão autenticada e só é limpo quando a mensagem é aceita.
+  Contrato e cenários em [assistant-models.md](assistant-models.md).
+
+## Mensagens do Assistente
+
+- A lixeira do histórico apenas solicita a exclusão: abrir confirmação “Apagar
+  conversa?” com o título da conversa, aviso de exclusão das mensagens e botões
+  Cancelar/Apagar, usando o fundo e as cores dos modais existentes. Cancelar,
+  voltar ou tocar fora não apagam nada. Durante a requisição, bloquear novo
+  envio, troca de conversa, confirmação repetida e fechamento do modal/histórico.
+  Em falha, preservar conversa e confirmação com erro e tentativa explícita;
+  sucesso remove somente a escolhida. Troca de conta invalida a confirmação.
+  A apresentação e a regra são comuns a Android/iOS.
+
+- `ChatBubble` usa uma apresentação comum Android/iOS para respostas novas e
+  histórico. Interpretar somente formatação limitada nas respostas normais do
+  assistente: negrito `**texto**`, parágrafos, quebras e listas simples, com
+  espaçamento compacto e recuo das linhas de continuação dos itens.
+- Preservar `message.content` original no estado, nos DTOs e no histórico.
+  Mensagens do usuário e avisos de cota/erro continuam literais. Marcadores
+  incompletos e asteriscos comuns não podem desaparecer por uma limpeza genérica.
+- Valores, sinais negativos, anos, IDs e emojis Unicode mantêm seu significado.
+  Não confundir uma linha monetária negativa com um marcador de lista. Emojis
+  são opcionais e não substituem informações ou estados por conta própria.
+- Manter seleção contínua, leitura acessível, tipografia, cores e largura do
+  balão. Usar Compose comum, sem HTML/WebView, imagens remotas, links ativos ou
+  dependência de Markdown completa. Conferir temas, tela estreita, fonte ampliada,
+  TalkBack e VoiceOver nos aparelhos; testes do parser não comprovam esses fluxos.
+
+## Entrada com biometria
+
+- Login, cadastro/confirmação e recuperação usam `AuthPage` e `AuthComponents`
+  comuns: marca compacta no topo, cabeçalho de conteúdo à esquerda sem ícone
+  grande adicional no corpo, campos e botões com
+  raio 12 dp e alturas mínimas compatíveis com fonte ampliada. Preservar tema
+  claro/escuro, áreas seguras e rolagem com teclado, sem fixar o botão de envio
+  longe do formulário. Recuperar senha mantém duas etapas: e-mail/Enviar código
+  e depois e-mail/código/nova senha/confirmação/Atualizar senha. No cadastro,
+  `AuthCodeField` tem seis células visuais e um único campo editável/colável.
+  Não acrescentar ajuda, contador de expiração, login social nem regras de senha
+  sem suporte confirmado. GateScreen preserva seu cabeçalho centralizado.
+
+- Com sessão salva e biometria ativada, exibir a mesma tela de login enquanto
+  o sistema solicita automaticamente digital, Face ID ou Touch ID. Não criar tela
+  intermediária de desbloqueio nem exigir toque para iniciar a autenticação.
+- Após cancelamento, manter o login com tentativa manual de biometria ou senha;
+  nunca repetir o prompt em ciclo nem expor conteúdo financeiro antes da confirmação.
+
+## Estados de carregamento
+
+- Mensagens transitórias de ações usam `AppNotification`, do designSystem, em
+  um único `SnackbarHost` compacto acima da barra inferior medida, dentro da área
+  segura e acima do teclado. Usar superfície do tema e ícone por tipo; confirmações
+  fecham ao toque e avisos/erros têm botão de fechar. `UiToast.success/error/warning` e
+  `UiServices.notify` encaminham mensagens tipadas; não inferir sucesso pelo texto.
+  Uma mensagem nova substitui a anterior, sem acumular confirmações antigas.
+  O espaço inferior deve ser a união da área segura/teclado com a altura medida
+  da barra, usando o maior valor. Não alternar o espaço da barra por um booleano
+  de teclado visível nem somar novamente seus insets: isso causa salto ao salvar
+  e fechar o teclado. A regra vale para todos os formulários e diálogos.
+  Falhas de carregamento continuam persistentes na própria tela, com retry.
+- Os avisos de Início, Despesas e Relatórios usam `loadNotices`: agrupar falhas de
+  transporte iguais e repetir somente as consultas afetadas. Manter erros HTTP
+  distintos separados. Se um painel já exibir o aviso central, seus componentes
+  internos não devem duplicá-lo. O retry no banner usa ícone de atualizar com
+  descrição acessível para liberar largura para a mensagem; não cortar o texto.
+
+- Falha de consulta não significa lista vazia: mostrar contagem indisponível (—)
+  enquanto os dados não foram carregados, em vez de afirmar zero despesas.
+- Categorias carregam independentemente das despesas; falha nos nomes/filtros
+  não deve bloquear a lista e os valores. Exibir o aviso específico e permitir
+  repetir somente a consulta de categorias. Se ambas falharem com o mesmo tipo
+  de falha de transporte, usar um aviso único com retry das duas consultas;
+  não agrupar erros HTTP distintos nem considerar timeout como ausência de internet.
+
+- Usar o componente `AppLoadingIndicator` para manter tamanho, cor e espessura consistentes nos indicadores de carregamento.
+- Exibir o carregamento central apenas na primeira abertura, quando ainda não existe conteúdo disponível.
+- Em atualizações de mês, data ou filtros, manter o conteúdo atual na tela e mostrar somente o indicador compacto no topo. A interface não deve piscar nem ser substituída por uma tela vazia.
+- Se uma atualização falhar e a tela continuar mostrando dados anteriores, avisar claramente que eles podem estar desatualizados. Usar `AppDataErrorBanner` com superfície do tema, borda e ícone de erro e ação “Tentar novamente”. Falha de comunicação deve mencionar conexão com o servidor, sem afirmar que a internet do usuário caiu. Preservar mensagens de erro da API e distinguir demora na resposta.
+- Ao tocar em “Tentar novamente” com dados antigos visíveis, manter o aviso, trocar a ação por “Tentando...” com indicador de progresso e impedir toques repetidos até a requisição terminar. Remover esse aviso somente após uma resposta bem-sucedida.
+- Sem conteúdo carregado, uma nova tentativa deve mostrar carregamento e limpar o erro da tentativa anterior. Se a nova tentativa também falhar, mostrar o erro terminal; não esconder falhas reais nem repetir consultas em ciclo. Reabrir uma aba não deve cancelar uma leitura idêntica ainda em andamento.
+- Em telas de painel, como Relatórios, uma falha inicial não deve desmontar a estrutura nem deixar uma grande área vazia. Manter ações e cards em seus estados vazios ou zerados, acompanhados do aviso de erro para deixar claro que os valores não foram carregados.
+- Nunca apresentar dados antigos como se pertencessem ao novo mês, data ou filtro sem informar o usuário.

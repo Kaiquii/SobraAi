@@ -1,0 +1,181 @@
+package com.example.appfinanceiro.feature.despesas.components
+
+import com.example.appfinanceiro.core.designsystem.components.AppSelectField
+import com.example.appfinanceiro.core.designsystem.components.AppSelectOption
+import com.example.appfinanceiro.core.designsystem.components.AppModalBottomSheet
+
+import com.example.appfinanceiro.core.network.PAYMENT_SOURCE_VALUES
+import com.example.appfinanceiro.core.network.paymentSourceDisplayName
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
+import com.example.appfinanceiro.core.designsystem.theme.PrimaryBlue
+
+@Composable
+fun ExpenseFilterButton(active: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val tint = if (active) PrimaryBlue else colors.onSurfaceVariant
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp).semantics {
+            contentDescription = "Filtrar despesas"
+            stateDescription = if (active) "Filtros ativos" else "Sem filtros ativos"
+        },
+        shape = RoundedCornerShape(12.dp),
+        color = if (active) PrimaryBlue.copy(alpha = 0.16f) else colors.surface
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.Tune, null, Modifier.size(24.dp), tint = tint)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ExpenseFiltersDialog(
+    categories: Map<Int, String>,
+    categoryId: Int?,
+    paymentSource: String?,
+    paymentStatus: String?,
+    onDismiss: () -> Unit,
+    onApply: (Int?, String?, String?) -> Unit,
+    categoryOptions: Map<Int, String> = categories
+) {
+    // Dismissal removes this draft; only Apply publishes it to the screen.
+    var draftCategory by rememberSaveable { mutableStateOf(categoryId) }
+    var draftSource by rememberSaveable { mutableStateOf(paymentSource) }
+    var draftStatus by rememberSaveable { mutableStateOf(paymentStatus) }
+    val colors = MaterialTheme.colorScheme
+
+    AppModalBottomSheet(
+        onDismissRequest = onDismiss,
+        skipPartiallyExpanded = true,
+        containerColor = colors.background,
+        contentColor = colors.onBackground
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Filtrar despesas",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Fechar filtros")
+                }
+            }
+            Text(
+                text = "Escolha quais despesas você quer visualizar.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.onBackground.copy(alpha = 0.65f)
+            )
+
+            Spacer(Modifier.height(20.dp))
+            FilterSelector(
+                label = "Categoria",
+                value = draftCategory?.let { categories[it] ?: "Categoria indisponível" } ?: "Todas",
+                options = listOf(null to "Todas") + categoryOptions.entries
+                    .sortedBy { it.value.lowercase() }.map { it.key to it.value },
+                selected = draftCategory,
+                onSelect = { draftCategory = it }
+            )
+            if (draftCategory != null && draftCategory !in categoryOptions) {
+                Text(
+                    text = "Esta categoria não tem despesas neste mês. Selecione outra ou use Todas.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+            FilterSelector(
+                label = "Origem do pagamento",
+                value = when (draftSource) {
+                    "Renda Extra" -> "Renda extra"
+                    null -> "Todas"
+                    else -> paymentSourceDisplayName(draftSource.orEmpty())
+                },
+                options = listOf(null to "Todas") + PAYMENT_SOURCE_VALUES.map { it to paymentSourceDisplayName(it) },
+                selected = draftSource,
+                onSelect = { draftSource = it }
+            )
+            Spacer(Modifier.height(20.dp))
+            FilterSelector(
+                label = "Status",
+                value = when (draftStatus) {
+                    "paid" -> "Pagas"
+                    "pending" -> "Pendentes"
+                    else -> "Todas"
+                },
+                options = listOf(null to "Todas", "paid" to "Pagas", "pending" to "Pendentes"),
+                selected = draftStatus,
+                onSelect = { draftStatus = it }
+            )
+
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = { onApply(draftCategory, draftSource, draftStatus) },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Aplicar filtros", fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(4.dp))
+            TextButton(
+                onClick = {
+                    draftCategory = null
+                    draftSource = null
+                    draftStatus = null
+                },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            ) {
+                Text("Limpar filtros", color = colors.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> FilterSelector(
+    label: String,
+    value: String,
+    options: List<Pair<T?, String>>,
+    selected: T?,
+    onSelect: (T?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    AppSelectField(
+        label = label, value = value,
+        options = options.map { AppSelectOption(it.first, it.second) },
+        selected = selected, expanded = expanded,
+        onExpandedChange = { expanded = it }, onSelect = onSelect
+    )
+}

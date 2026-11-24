@@ -1,0 +1,285 @@
+"use client";
+
+import { Loader2 } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+
+import { Alert } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { useLockBodyScroll } from "@/components/ui/use-lock-body-scroll";
+import { useIncomeStore } from "@/features/incomes/store/useIncomeStore";
+import type { Income, IncomeSource } from "@/features/incomes/types/income";
+import { buildIncomeCreateRequest, findIncomeByReference } from "@/features/incomes/utils/incomeUtils";
+import { formatAmountInput, parseAmountInput } from "@/lib/formatters";
+import { cn } from "@/lib/utils";
+import { paymentSourceLabel } from "@/lib/payment-sources";
+
+export type IncomeShortcutAction = "create" | "delete" | "edit";
+
+export type IncomeShortcut = {
+  action: IncomeShortcutAction;
+  amount: number;
+  month: number;
+  source: IncomeSource;
+  year: number;
+};
+
+type IncomeShortcutDialogProps = {
+  onClose: () => void;
+  onSuccess: () => void;
+  shortcut: IncomeShortcut | null;
+};
+
+const sourceLabels: Record<IncomeSource, string> = {
+  Adiantamento: "adiantamento",
+  "Renda Extra": "renda extra",
+  Salario: "salário",
+  VA: "Vale-alimentação (VA)",
+  VR: "Vale-refeição (VR)",
+};
+
+function findIncome(
+  incomes: Income[],
+  source: IncomeSource,
+  month: number,
+  year: number,
+) {
+  return findIncomeByReference(incomes, source, month, year);
+}
+
+function getTitle({ action, source }: IncomeShortcut) {
+  if (source === "VA" || source === "VR") return action === "create" ? "Criar renda" : action === "edit" ? "Editar renda" : "Excluir renda";
+  if (action === "create") {
+    return `Criar ${sourceLabels[source]}`;
+  }
+
+  if (action === "edit") {
+    return `Editar ${sourceLabels[source]}`;
+  }
+
+  return "Excluir renda";
+}
+
+function getDefaultFuture({ action, source }: IncomeShortcut) {
+  if (action === "edit") {
+    return true;
+  }
+
+  if (action === "delete") {
+    return false;
+  }
+
+  return source !== "Renda Extra";
+}
+
+export function IncomeShortcutDialog({
+  onClose,
+  onSuccess,
+  shortcut,
+}: IncomeShortcutDialogProps) {
+  if (!shortcut) {
+    return null;
+  }
+
+  return (
+    <IncomeShortcutDialogContent
+      key={`${shortcut.action}-${shortcut.source}-${shortcut.month}-${shortcut.year}-${shortcut.amount}`}
+      onClose={onClose}
+      onSuccess={onSuccess}
+      shortcut={shortcut}
+    />
+  );
+}
+
+type IncomeShortcutDialogContentProps = {
+  onClose: () => void;
+  onSuccess: () => void;
+  shortcut: IncomeShortcut;
+};
+
+function IncomeShortcutDialogContent({
+  onClose,
+  onSuccess,
+  shortcut,
+}: IncomeShortcutDialogContentProps) {
+  useLockBodyScroll();
+
+  const clearFeedback = useIncomeStore((state) => state.clearFeedback);
+  const createIncome = useIncomeStore((state) => state.createIncome);
+  const deleteIncome = useIncomeStore((state) => state.deleteIncome);
+  const error = useIncomeStore((state) => state.error);
+  const incomes = useIncomeStore((state) => state.incomes);
+  const isLoading = useIncomeStore((state) => state.isLoading);
+  const isSubmitting = useIncomeStore((state) => state.isSubmitting);
+  const loadIncomes = useIncomeStore((state) => state.loadIncomes);
+  const updateIncome = useIncomeStore((state) => state.updateIncome);
+
+  const [amount, setAmount] = useState(
+    shortcut.action === "edit" ? formatAmountInput(shortcut.amount) : "",
+  );
+  const [applyFuture, setApplyFuture] = useState(getDefaultFuture(shortcut));
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [hasLoadedIncomes, setHasLoadedIncomes] = useState(false);
+
+  useEffect(() => {
+    if (shortcut.action === "create") return;
+    let active = true;
+    void loadIncomes(shortcut.month, shortcut.year).finally(() => {
+      if (active) setHasLoadedIncomes(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [loadIncomes, shortcut.action, shortcut.month, shortcut.year]);
+
+  const selectedIncome = useMemo(
+    () => findIncome(incomes, shortcut.source, shortcut.month, shortcut.year),
+    [incomes, shortcut.month, shortcut.source, shortcut.year],
+  );
+
+  const isDelete = shortcut.action === "delete";
+  const needsExistingIncome =
+    shortcut.action === "edit" || shortcut.action === "delete";
+  const waitingForIncome =
+    needsExistingIncome && (!hasLoadedIncomes || isLoading);
+  const missingIncome =
+    !waitingForIncome && needsExistingIncome && !selectedIncome;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (waitingForIncome) return;
+    setLocalError(null);
+    clearFeedback();
+
+    if (missingIncome) {
+      setLocalError("Não encontrei essa renda para aplicar o atalho.");
+      return;
+    }
+
+    try {
+      if (shortcut.action === "delete") {
+        await deleteIncome(selectedIncome!.id, applyFuture);
+        onSuccess();
+        return;
+      }
+
+      const parsedAmount = parseAmountInput(amount);
+
+      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        setLocalError("Informe um valor maior que zero.");
+        return;
+      }
+
+      if (shortcut.action === "create") {
+        await createIncome(buildIncomeCreateRequest(shortcut.source, parsedAmount, shortcut.month, shortcut.year, applyFuture));
+      } else {
+        await updateIncome(selectedIncome!.id, {
+          amount: parsedAmount,
+          update_future: applyFuture,
+        });
+      }
+
+      onSuccess();
+    } catch {}
+  }
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 py-6 backdrop-blur-sm"
+      role="dialog"
+    >
+      <form
+        className="mobile-compact-dialog max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto rounded-lg border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-800 dark:bg-slate-900 sm:p-6"
+        onSubmit={handleSubmit}
+      >
+        <h2 className="text-xl font-semibold tracking-normal text-slate-950 dark:text-white max-sm:text-[22px] max-sm:leading-7">
+          {getTitle(shortcut)}
+        </h2>
+        {(shortcut.source === "VA" || shortcut.source === "VR") ? <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{paymentSourceLabel(shortcut.source)}</p> : null}
+
+        <div className="mt-7 space-y-5 max-sm:mt-5 max-sm:space-y-3">
+          {error || localError ? (
+            <Alert variant="error">{localError ?? error}</Alert>
+          ) : null}
+
+          {missingIncome ? (
+            <Alert variant="info">
+              Ainda não existe registro para este mês. Use o atalho de criar.
+            </Alert>
+          ) : null}
+
+          {isDelete ? (
+            <p className="text-base leading-7 text-slate-700 dark:text-slate-200">
+              Tem certeza que deseja remover o {sourceLabels[shortcut.source]}?
+            </p>
+          ) : (
+            <div className="relative">
+              <Input
+                autoFocus
+                className="h-14 rounded-md border-slate-400 bg-transparent px-4 text-base dark:border-slate-500 dark:bg-transparent"
+                inputMode="decimal"
+                onChange={(event) => setAmount(event.target.value)}
+                placeholder="Valor"
+                value={amount}
+              />
+              {shortcut.action === "edit" ? (
+                <span className="absolute -top-3 left-4 bg-white px-1 text-sm text-slate-500 dark:bg-slate-900 dark:text-slate-300">
+                  Valor
+                </span>
+              ) : null}
+            </div>
+          )}
+
+          <label
+            className={cn(
+              "flex items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-700 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300 max-sm:min-h-12 max-sm:gap-3 max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:text-[13px] dark:max-sm:bg-transparent",
+              isSubmitting && "opacity-70",
+            )}
+          >
+            <input
+              checked={applyFuture}
+              className={cn(
+                "h-6 w-6 rounded border-slate-400 bg-transparent accent-blue-600 max-sm:h-5 max-sm:w-5 max-sm:shrink-0",
+                isDelete && "accent-red-500",
+              )}
+              disabled={isSubmitting}
+              onChange={(event) => setApplyFuture(event.target.checked)}
+              type="checkbox"
+            />
+            {shortcut.action === "create"
+              ? "Repetir nos próximos meses"
+              : shortcut.action === "edit"
+                ? "Atualizar este e os próximos meses"
+                : "Excluir esta e as próximas"}
+          </label>
+        </div>
+
+        <div className="mobile-compact-dialog-actions mt-8 flex justify-end gap-3">
+          <button
+            className="inline-flex h-10 cursor-pointer items-center justify-center rounded-lg px-4 text-sm font-semibold text-blue-600 hover:bg-blue-50 hover:text-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-400 dark:hover:bg-blue-950/35"
+            disabled={isSubmitting}
+            onClick={onClose}
+            type="button"
+          >
+            Cancelar
+          </button>
+          <button
+            className={cn(
+              "inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:text-slate-950 dark:hover:bg-blue-400",
+              !isDelete && "max-sm:bg-transparent max-sm:px-3 max-sm:text-blue-600 max-sm:hover:bg-blue-50 dark:max-sm:bg-transparent dark:max-sm:text-blue-400 dark:max-sm:hover:bg-blue-950/35",
+              isDelete &&
+                "bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:text-white dark:hover:bg-red-400",
+            )}
+            disabled={isSubmitting || waitingForIncome || missingIncome}
+            type="submit"
+          >
+            {isSubmitting ? (
+              <Loader2 aria-hidden="true" className="animate-spin" size={15} />
+            ) : null}
+            {isDelete ? "Excluir" : "Salvar"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
