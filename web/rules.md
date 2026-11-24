@@ -1,5 +1,11 @@
 # Regras do projeto
 
+## Contexto obrigatório antes de agir
+
+Leia o [AGENTS.md do monorepo](../AGENTS.md) e execute `npm run ai:context` antes de analisar, editar ou executar comandos. O harness carrega o conteúdo atual das regras gerais e da Web pelo mapa `../project-rules.json`, além dos documentos locais configurados. Leia os documentos específicos do fluxo apontados por essas fontes. Tarefas em outros projetos exigem carregar também suas regras antes de atuar neles. Regra obrigatória ausente ou vazia bloqueia a carga; não presumir instruções nem ignorar a falha. Antes da entrega, revisar as alterações contra essas regras.
+
+Commit e push somente quando autorizados; servidores da aplicação são iniciados e controlados exclusivamente pelo usuário.
+
 ## Git somente na main
 
 Orientação permanente do usuário em 04/11/2026:

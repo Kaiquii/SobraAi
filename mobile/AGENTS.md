@@ -17,6 +17,8 @@ O backend está em `../backend/`, no mesmo monorepo, e mantém suas próprias
 regras em `../backend/AGENTS.md`. Acesso a VM, banco remoto e deploy continua
 dependendo de autorização específica; a presença do código não autoriza produção.
 
+Antes de analisar ou editar, carregue `.\scripts\test-harness.ps1 -Mode context`. O contexto inclui o `../AGENTS.md` do monorepo e todos os documentos mobile em `../project-rules.json`. As regras são cumulativas; leia também os documentos específicos do fluxo apontados por elas. Arquivo obrigatório ausente ou vazio impede prosseguir.
+
 Antes de editar:
 
 1. Confira `git status --short` e `git branch --show-current`; preserve alterações

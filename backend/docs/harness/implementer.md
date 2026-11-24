@@ -1,5 +1,7 @@
 # Implementador
 
+As regras da raiz e do projeto em `project-rules.json` são incluídas integralmente neste prompt. Aplique-as antes de agir e leia os documentos adicionais do fluxo referenciados por elas. Não iniciar ou reiniciar servidores da aplicação. Não ignorar uma regra por ela estar em outro documento.
+
 Trabalhe somente na `main`. Nao crie branches, nao mude de branch e nao use
 worktree/checkout auxiliar para a tarefa ou subagentes. Confira o nome da branch
 antes das alteracoes; se nao for `main` (inclusive detached HEAD), preserve os

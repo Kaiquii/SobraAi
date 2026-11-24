@@ -1,5 +1,9 @@
 # Harness executavel
 
+## Contexto obrigatório das regras
+
+`go run ./cmd/harness -mode context` imprime o conteúdo atual dos documentos do backend e da raiz em `../../../project-rules.json`. Não inicia a API, não chama agentes e não exige autenticação do CLI. Os demais modos conferem esses documentos antes de executar. Em `run`, cada etapa recebe novamente seu conteúdo no prompt; `prepare` e `run` registram o contexto em `project-rules.md` nos artefatos da execução. Arquivo obrigatório ausente, vazio ou ilegível interrompe o processo. As regras específicas referenciadas pelos documentos também devem ser lidas conforme o escopo da tarefa. Os perfis do harness continuam sem realizar commit, push ou deploy; fora desse fluxo, commit/push exigem autorização do usuário. Somente o usuário inicia e controla os servidores da aplicação.
+
 Requisitos: Go conforme go.mod, Git e Codex CLI autenticado para executar agentes.
 Os comandos devem ser executados na raiz do repositorio. Os testes e a preparacao
 de tarefas nao precisam de autenticacao, banco ou servicos de IA.

@@ -6,7 +6,7 @@ This version has breaking changes - APIs, conventions, and file structure may al
 
 # Orientacoes para IAs
 
-Antes de alterar codigo neste projeto, leia e siga:
+Antes de analisar ou alterar este projeto, carregue `npm run ai:context` e leia o `../AGENTS.md` do monorepo. As regras gerais e específicas são cumulativas; o mapa `../project-rules.json` deve acompanhar mudanças permanentes de regras. Leia e siga também:
 
 - `rules.md`
 - `docs/ai-guidelines.md`

@@ -26,7 +26,7 @@ padrão Web em todas as larguras, inclusive no celular/PWA e em seus modais;
 não copiar Roboto. Critérios, referências, testes e pendências:
 [patrimonio.md](patrimonio.md).
 
-- Repositório: https://github.com/Kaiquii/Sobra-Ai-Android.git
+- Repositório atual: https://github.com/Kaiquii/SobraAi, pasta `mobile/`. Os commits citados como referência histórica são anteriores à unificação.
 - Projeto local: `../../mobile`
 - Referência aprovada atual: Android 1.4.5, versionCode 145, commit `78a86c6`, conforme guia recebido em 25/10/2026. Critérios completos, fontes atuais e diferenças web estão em [android-parity-harness.md](android-parity-harness.md).
 - Referências consultadas: `core/designsystem/theme/Color.kt`, `StandardBottomBar.kt` e as telas de início, despesas, relatórios, perfil e autenticação.

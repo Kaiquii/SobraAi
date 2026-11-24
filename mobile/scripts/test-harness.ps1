@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("unit", "kmp", "verify", "device", "all")]
+    [ValidateSet("context", "doctor", "unit", "kmp", "verify", "device", "all")]
     [string] $Mode = "verify",
 
     [string] $ApiBaseUrl,
@@ -17,6 +17,41 @@ $localProperties = Join-Path $projectRoot "local.properties"
 function Stop-Harness([string] $Message) {
     Write-Error "[harness] $Message"
     exit 1
+}
+
+function Read-ProjectRules {
+    $monorepoRoot = Split-Path -Parent $projectRoot
+    $manifestPath = Join-Path $monorepoRoot "project-rules.json"
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { Stop-Harness "Mapa de regras obrigatorio ausente: $manifestPath" }
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($manifest.schemaVersion -ne 1 -or "AGENTS.md" -notin $manifest.common -or -not $manifest.projects.mobile) {
+        Stop-Harness "Mapa de regras incompleto para o mobile."
+    }
+    $paths = @($manifest.common) + @($manifest.projects.mobile)
+    foreach ($relativePath in ($paths | Select-Object -Unique)) {
+        if ([IO.Path]::IsPathRooted($relativePath) -or $relativePath -notlike "*.md" -or $relativePath -match '(^|[\\/])\.\.([\\/]|$)') {
+            Stop-Harness "Caminho de regra invalido: $relativePath"
+        }
+        $rulePath = Join-Path $monorepoRoot $relativePath
+        if (-not (Test-Path -LiteralPath $rulePath -PathType Leaf)) { Stop-Harness "Regra obrigatoria ausente: $relativePath" }
+        $contents = Get-Content -LiteralPath $rulePath -Raw -Encoding UTF8
+        if ([string]::IsNullOrWhiteSpace($contents)) { Stop-Harness "Regra obrigatoria vazia: $relativePath" }
+        [PSCustomObject]@{ File = $relativePath; Contents = $contents }
+    }
+}
+
+$projectRules = @(Read-ProjectRules)
+if ($Mode -eq "context") {
+    foreach ($rule in $projectRules) {
+        Write-Output ""
+        Write-Output "--- REGRA: $($rule.File) ---"
+        Write-Output $rule.Contents
+    }
+    exit 0
+}
+if ($Mode -eq "doctor") {
+    Write-Host "[harness] $($projectRules.Count) documentos obrigatorios validos."
+    exit 0
 }
 
 function Get-AndroidSdkPath {

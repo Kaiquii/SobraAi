@@ -64,7 +64,7 @@ func TestPipelineGatesAndRetries(t *testing.T) {
 		{"repair test failure", "repair", true, 5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := harnessRootFixture(t)
 			dir := t.TempDir()
 			if err := os.MkdirAll(filepath.Join(root, "docs", "harness"), 0700); err != nil {
 				t.Fatal(err)
@@ -87,6 +87,9 @@ func TestPipelineGatesAndRetries(t *testing.T) {
 						return errors.New("test failed")
 					}
 					return nil
+				}
+				if !strings.Contains(input, "regra comum do monorepo") || !strings.Contains(input, "backend/docs/rules.md") {
+					t.Fatal("agent prompt omitted actual project rules")
 				}
 				if tc.failure == "crash" {
 					return errors.New("process failed")
@@ -144,7 +147,15 @@ func TestPipelineGatesAndRetries(t *testing.T) {
 
 func harnessRootFixture(t *testing.T) string {
 	t.Helper()
-	root := t.TempDir()
+	monorepo := t.TempDir()
+	root := filepath.Join(monorepo, "backend")
+	if err := os.WriteFile(filepath.Join(monorepo, "AGENTS.md"), []byte("regra comum do monorepo"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{ "schemaVersion": 1, "common": ["AGENTS.md"], "projects": {"backend": ["backend/AGENTS.md", "backend/docs/rules.md"]} }`
+	if err := os.WriteFile(filepath.Join(monorepo, "project-rules.json"), []byte(manifest), 0600); err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{"AGENTS.md", "go.mod", "docs/rules.md", "docs/harness/implementer.md", "docs/harness/reviewer.md", "docs/harness/result.schema.json"} {
 		path := filepath.Join(root, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {

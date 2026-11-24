@@ -1,5 +1,11 @@
 # Regras KMP — Android e iPhone
 
+## Contexto obrigatório do monorepo
+
+Antes de analisar, editar ou executar comandos, carregue `.\scripts\test-harness.ps1 -Mode context` dentro de `mobile/`. O mapa `../project-rules.json` inclui o [AGENTS.md geral](../AGENTS.md), o [AGENTS.md mobile](AGENTS.md) e as regras de arquitetura, KMP, interface e validação deste projeto. Leia também os documentos específicos do fluxo. Tarefas entre projetos exigem carregar suas regras antes de atuar neles. Documento obrigatório ausente, vazio ou ilegível interrompe a carga; não presumir instruções nem remover a exigência. Antes da entrega, confronte o diff com essas regras.
+
+Commit e push continuam condicionados à autorização do usuário; os servidores da aplicação são iniciados e controlados por ele.
+
 O SobraAi é um projeto **Kotlin Multiplatform para Android e iOS**. Toda mudança
 deve preservar o funcionamento nas duas plataformas. Uma tarefa só parecer
 correta no Android não basta para declarar a compatibilidade KMP aprovada.

@@ -1,5 +1,11 @@
 # Regras obrigatórias do projeto
 
+## Contexto obrigatório do monorepo
+
+Antes de analisar, editar ou executar comandos, execute `npm run ai:context` na pasta `admin/`. O mapa `../../project-rules.json` carrega o conteúdo atual do [AGENTS.md geral](../../AGENTS.md), do [AGENTS.md do admin](../AGENTS.md), destas regras e do [mapa de arquitetura](mapeamento-arquitetura-features.md). As instruções são cumulativas; leia também os documentos específicos do fluxo. Carregue as regras dos demais projetos se o escopo os envolver. Documento obrigatório ausente, vazio ou ilegível bloqueia a carga. Revise o diff contra as regras antes da entrega.
+
+Commit/push somente quando autorizados pelo usuário; iniciar e controlar o servidor da aplicação é responsabilidade exclusiva dele.
+
 Este documento define os padrões que devem ser considerados antes de qualquer análise, implementação ou refatoração. Toda alteração deve preservar as decisões abaixo e permanecer alinhada aos demais documentos da pasta `docs`.
 
 ## 1. Arquitetura por módulos e features

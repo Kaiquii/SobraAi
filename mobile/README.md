@@ -50,13 +50,13 @@ Para desenvolver o Android, use o **Android Studio**. Para o iOS, siga a seção
 ### 1. Clonar o repositório
 
 ```bash
-git clone https://github.com/Kaiquii/Sobra-Ai-Android.git
-cd Sobra-Ai-Android
+git clone https://github.com/Kaiquii/SobraAi.git
+cd SobraAi/mobile
 ```
 
 ## Build iOS no Mac
 
-Execute os comandos abaixo **na raiz do repositório**. O projeto contém targets
+Execute os comandos abaixo **na pasta `mobile/` do monorepo**. O projeto contém targets
 `iosArm64` (iPhone/iPad) e `iosSimulatorArm64` (simulador em Mac Apple Silicon).
 Não há target de simulador Intel `iosX64` configurado.
 
@@ -94,7 +94,7 @@ sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
 
 ### 2. Configurar SDK, API e assinatura
 
-Crie ou ajuste `local.properties` na raiz com o caminho do SDK **no Mac** e a
+Crie ou ajuste `local.properties` em `mobile/` com o caminho do SDK **no Mac** e a
 URL HTTPS real da API. Preserve outras configurações locais que já existirem:
 
 ```properties
@@ -171,7 +171,7 @@ Esse artefato é para simulador; não é um IPA para instalar no iPhone.
 
 ### 5. Validar
 
-Com SDK e API configurados, execute a verificação local Android/KMP pela raiz:
+Com SDK e API configurados, execute a verificação local Android/KMP a partir de `mobile/`:
 
 ```sh
 /bin/sh ./gradlew harnessVerify

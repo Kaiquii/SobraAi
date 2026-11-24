@@ -1,5 +1,9 @@
 # Comandos Canonicos
 
+## Carregar as regras antes do trabalho
+
+Execute `go run ./cmd/harness -mode context` dentro de `backend/`. Esse comando finito imprime o conteúdo atual das regras gerais e específicas em `../project-rules.json`, sem iniciar a API nem chamar agentes. Leia também os documentos do fluxo apontados por elas. Commit/push somente quando autorizados; servidores da aplicação pelo usuário.
+
 Execute os comandos a partir da raiz do repositorio.
 
 ## Git: Main Obrigatoria

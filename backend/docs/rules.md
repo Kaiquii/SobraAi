@@ -1,5 +1,11 @@
 # Regras Do Projeto
 
+## Contexto obrigatório do monorepo
+
+Antes de analisar, editar ou executar comandos, execute `go run ./cmd/harness -mode context` dentro de `backend/`. O mapa `../../project-rules.json` inclui o [AGENTS.md geral](../../AGENTS.md), o [AGENTS.md do backend](../AGENTS.md), estas regras e os comandos/checklist em `.agents/`. O harness inclui o conteúdo atual desses documentos no prompt do implementador e do revisor. Documento obrigatório ausente, vazio ou ilegível impede a execução; não supor regras nem retirar uma entrada para passar. Leia também os contratos e documentos específicos do fluxo. Ampliação do escopo para outro projeto exige carregar suas regras antes de atuar nele. Antes da entrega, revisar o diff contra as regras carregadas.
+
+Commit/push somente quando autorizados pelo usuário; servidores da aplicação são iniciados e controlados por ele. Comandos finitos de testes, build e contexto não iniciam o servidor da aplicação.
+
 ## Git: Sempre Na Main
 
 - Nao criar novas branches para nenhuma tarefa, teste, deploy, harness ou subagente,

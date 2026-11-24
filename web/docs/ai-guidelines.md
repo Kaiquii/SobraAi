@@ -2,6 +2,10 @@
 
 Este arquivo define regras permanentes para qualquer IA ou pessoa que trabalhar neste projeto.
 
+## Contexto obrigatório do monorepo
+
+Antes de analisar, editar ou executar comandos, execute `npm run ai:context`. Ele inclui o conteúdo atual do `../AGENTS.md` e dos documentos obrigatórios da Web em `../project-rules.json`, além do contexto local configurado. Siga todas essas regras e os documentos específicos referenciados para o fluxo afetado. Se o escopo envolver outro projeto, carregue também seu contexto. Arquivo obrigatório ausente, vazio ou ilegível impede prosseguir; não supor regras nem remover a exigência. Revise o diff contra as regras antes da entrega.
+
 ## Antes de alterar codigo
 
 - Leia o `AGENTS.md` da raiz.

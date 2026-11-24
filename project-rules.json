@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "common": ["AGENTS.md"],
+  "projects": {
+    "web": [
+      "web/AGENTS.md",
+      "web/rules.md",
+      "web/docs/ai-guidelines.md",
+      "web/docs/project-architecture.md",
+      "web/docs/backend-api-contract.md",
+      "web/docs/android-reference.md",
+      "web/docs/android-parity-harness.md"
+    ],
+    "admin": [
+      "admin/AGENTS.md",
+      "admin/docs/rules.md",
+      "admin/docs/mapeamento-arquitetura-features.md"
+    ],
+    "backend": [
+      "backend/AGENTS.md",
+      "backend/docs/rules.md",
+      "backend/.agents/commands.md",
+      "backend/.agents/review-checklist.md"
+    ],
+    "mobile": [
+      "mobile/AGENTS.md",
+      "mobile/rules.md",
+      "mobile/docs/ai-project-map.md",
+      "mobile/docs/ai-workflow.md",
+      "mobile/docs/frontend-rules.md",
+      "mobile/docs/test-harness.md",
+      "mobile/docs/kmp-compose-ios.md"
+    ]
+  }
+}

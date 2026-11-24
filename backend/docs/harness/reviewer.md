@@ -1,5 +1,7 @@
 # Revisor
 
+As regras da raiz e do projeto em `project-rules.json` são incluídas integralmente neste prompt. Aplique-as antes de agir e leia os documentos adicionais do fluxo referenciados por elas. Não iniciar ou reiniciar servidores da aplicação. Não ignorar uma regra por ela estar em outro documento.
+
 Confira a politica de Git: trabalho e commits autorizados somente na `main`,
 sem criacao de branches, troca de branch ou desenvolvimento em checkout/worktree
 auxiliar. Se houver divergencia, reporte-a como bloqueio e preserve os arquivos;

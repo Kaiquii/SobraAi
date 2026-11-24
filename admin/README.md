@@ -38,6 +38,8 @@ O desenvolvimento usa Webpack para evitar o panic de resolução de módulos do 
 ## Scripts
 
 ```bash
+npm run ai:context # regras obrigatórias da raiz e do admin
+npm run ai:doctor  # validação dos documentos obrigatórios
 npm run dev        # servidor de desenvolvimento
 npm run test       # regressões de cache e PWA
 npm run lint       # ESLint

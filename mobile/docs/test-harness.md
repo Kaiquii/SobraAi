@@ -1,5 +1,9 @@
 # Harness Android e iOS/KMP
 
+## Regras obrigatórias
+
+Execute `.\scripts\test-harness.ps1 -Mode context` a partir de `mobile/` antes do trabalho. O modo imprime o conteúdo atual das regras da raiz e do mobile, listadas em `../../project-rules.json`, sem consultar SDK, API ou dispositivo. `-Mode doctor` confere somente a presença e o conteúdo desses documentos. Os demais modos também recusam regras ausentes ou vazias antes da validação técnica. Leia os contratos e documentos específicos do fluxo referenciados por essas regras; um build verde não substitui essa leitura nem a revisão do diff. Commit/push somente quando autorizados; servidores da aplicação pelo usuário.
+
 O SobraAi é um projeto **Kotlin Multiplatform para Android e iPhone**. O harness
 deve detectar regressões no código comum e nos adaptadores das duas plataformas;
 aprovação apenas Android/JVM não comprova funcionamento iOS. A política do

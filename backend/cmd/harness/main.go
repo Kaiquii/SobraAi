@@ -177,6 +177,10 @@ func pipelineWithBranchPolicy(ctx context.Context, root, dir, cli, task string, 
 			if readErr != nil {
 				return readErr
 			}
+			rules, rulesErr := readProjectRules(root)
+			if rulesErr != nil {
+				return rulesErr
+			}
 			output := filepath.Join(dir, fmt.Sprintf("%d-%s.json", attempt, role))
 			log, createErr := os.Create(filepath.Join(dir, fmt.Sprintf("%d-%s.log", attempt, role)))
 			if createErr != nil {
@@ -186,7 +190,7 @@ func pipelineWithBranchPolicy(ctx context.Context, root, dir, cli, task string, 
 			if role == "implementer" {
 				sandbox = "workspace-write"
 			}
-			prompt := string(profile) + "\nLeia AGENTS.md e docs/rules.md. Trabalhe exclusivamente na branch main. Nao crie, troque, renomeie ou exclua branches, nem use worktrees para contornar essa regra. Commits do projeto pertencem somente a main; neste harness, nao faca commit, push ou deploy. Nao execute novamente o harness de agentes.\nTarefa:\n" + task + "\nFeedback anterior:\n" + feedback
+			prompt := string(profile) + "\nRegras obrigatorias atuais do projeto:\n" + rules + "\nLeia AGENTS.md e docs/rules.md. Trabalhe exclusivamente na branch main. Nao crie, troque, renomeie ou exclua branches, nem use worktrees para contornar essa regra. Commits do projeto pertencem somente a main; neste harness, nao faca commit, push ou deploy. Nao execute novamente o harness de agentes.\nTarefa:\n" + task + "\nFeedback anterior:\n" + feedback
 			args := []string{"exec", "--ephemeral", "--sandbox", sandbox, "--json", "--output-schema", filepath.Join(root, "docs", "harness", "result.schema.json"), "--output-last-message", output, "-C", root, "-"}
 			err = run(ctx, root, cli, args, prompt, log)
 			closeErr := log.Close()
@@ -241,7 +245,7 @@ func execute(args []string) error {
 
 func executeWithRunner(args []string, run runner) error {
 	f := flag.NewFlagSet("harness", flag.ContinueOnError)
-	mode := f.String("mode", "verify", "verify, prepare, run or doctor")
+	mode := f.String("mode", "verify", "context, verify, prepare, run or doctor")
 	task := f.String("task", "", "task and acceptance criteria")
 	cli := f.String("codex", "codex", "Codex CLI executable or absolute path")
 	attempts := f.Int("attempts", 2, "maximum implementation/review cycles (1-5)")
@@ -261,9 +265,16 @@ func executeWithRunner(args []string, run runner) error {
 			return fmt.Errorf("execute na raiz do repositorio: %w", err)
 		}
 	}
+	rules, err := readProjectRules(root)
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), *limit)
 	defer cancel()
 	switch *mode {
+	case "context":
+		fmt.Print(rules)
+		return nil
 	case "verify":
 		return validate(ctx, root, run, os.Stdout)
 	case "doctor":
@@ -304,6 +315,9 @@ func executeWithRunner(args []string, run runner) error {
 		return err
 	}
 	fmt.Println("Run artifacts:", dir)
+	if err = os.WriteFile(filepath.Join(dir, "project-rules.md"), []byte(rules), 0600); err != nil {
+		return err
+	}
 	if err = os.WriteFile(filepath.Join(dir, "task.md"), []byte(*task), 0600); err != nil {
 		return err
 	}

@@ -9,6 +9,8 @@ categorias, relatorios, assistente de IA, versao do aplicativo e fotos de perfil
 
 ## Contexto Obrigatorio
 
+Antes de analisar, editar ou executar comandos, carregue `go run ./cmd/harness -mode context`. O mapa `../project-rules.json` inclui o `../AGENTS.md` geral e as regras deste projeto, que são cumulativas. O conteúdo atual é incluído automaticamente nos prompts do harness. Leia também os documentos específicos referenciados pelo fluxo afetado. Documento obrigatório ausente ou vazio impede prosseguir; não presumir regras. Somente o usuário inicia, reinicia e controla os servidores da aplicação; reutilize a instância dele para validação.
+
 Antes de alterar codigo:
 
 1. Leia `docs/rules.md`. As restricoes de VM, producao, migrations e conclusao sao obrigatorias.

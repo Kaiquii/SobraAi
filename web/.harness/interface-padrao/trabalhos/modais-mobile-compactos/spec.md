@@ -17,7 +17,7 @@ Preservar mudanças anteriores ainda não commitadas de remoção de adiantament
 | Outros diálogos e painéis | Confirmações, `ModalPanel`, exportação e seletores | Componentes compartilhados atuais | Distinção diálogo/painel/tela | Conferir altura pelo conteúdo e evitar expansão vazia; não forçar altura única em todos |
 | Telas de edição | Android `NovaDespesaScreen.kt` e `EditarDespesaScreen.kt` | `ExpenseFormDialog` | Tela cheia mobile e teclado | Não reduzir a modal centralizado: o Android também usa tela cheia |
 
-Raiz Android: `C:/Users/kaiqu/StudioProjects/App-Financeiro/sharedUi/src/commonMain/kotlin/com/example/appfinanceiro/`.
+Fontes Android: `mobile/sharedUi/src/commonMain/kotlin/com/example/appfinanceiro/`, a partir da raiz do monorepo.
 
 ## Proposta v2
 

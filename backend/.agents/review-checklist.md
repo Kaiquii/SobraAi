@@ -1,5 +1,11 @@
 # Checklist De Revisao
 
+## Regras do projeto
+
+- [ ] O contexto atual da raiz e dos projetos afetados foi carregado pelo mapa `../project-rules.json`.
+- [ ] Os documentos específicos do fluxo foram lidos e o diff foi confrontado com suas regras.
+- [ ] Commit/push ocorreram apenas quando autorizados; nenhum servidor da aplicação foi iniciado pelo agente.
+
 ## Git: Somente Main
 
 - [ ] O trabalho e os commits/pushes autorizados ocorreram na `main`.

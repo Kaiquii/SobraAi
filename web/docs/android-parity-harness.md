@@ -76,8 +76,9 @@ mas isso não certifica a experiência Web. A matriz específica e as evidência
 ainda a registrar estão em [assistant-automatic-routing.md](assistant-automatic-routing.md).
 
 Referência recebida em 25/10/2026: Android **1.4.5**, versionCode **145**, commit
-**78a86c6** na main de [Sobra-Ai-Android](https://github.com/Kaiquii/Sobra-Ai-Android.git).
-Fonte completa local: `../../mobile/docs/web-parity-harness.md`.
+**78a86c6** na main do antigo repositório Android, anterior à unificação.
+Regras atuais de interface: [frontend-rules.md](../../mobile/docs/frontend-rules.md).
+Fontes atuais: `../../mobile/sharedUi/src/commonMain/kotlin/`.
 O documento de origem foi criado depois desse commit; sua presença nesse commit
 não é presumida. Esta cópia adaptada mantém os critérios sem expor rotas,
 métodos HTTP, corpos de requisição ou detalhes operacionais da API em Markdown.

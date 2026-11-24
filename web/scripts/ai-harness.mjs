@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import process from "node:process";
 import { getGitBranchPolicyError } from "./git-guardrails.mjs";
 import { hasCustomFontLoading, hasThemeColorTransition } from "./ui-guardrails.mjs";
+import { loadProjectRules } from "../../scripts/project-rules.mjs";
 
 const projectRoot = process.cwd();
 const configPath = resolve(projectRoot, "ai-harness.config.json");
@@ -67,6 +68,19 @@ function loadHarness() {
   return readJson(configPath);
 }
 
+function requiredContext(config) {
+  const shared = loadProjectRules(["web"], { root: resolve(projectRoot, "..") });
+  const documents = new Map(shared.map(({ file, contents }) => [
+    relative(projectRoot, resolve(projectRoot, "..", file)).replaceAll("\\", "/"), contents,
+  ]));
+  for (const file of config.context.requiredFiles) {
+    const contents = readFileSync(resolve(projectRoot, file), "utf8").trim();
+    if (!contents) throw new Error(`Arquivo de contexto vazio: ${file}`);
+    documents.set(file, contents);
+  }
+  return [...documents].map(([file, contents]) => ({ file, contents }));
+}
+
 function doctor(config) {
   const errors = [];
   const packagePath = resolve(projectRoot, "package.json");
@@ -79,11 +93,8 @@ function doctor(config) {
     errors.push(branchError);
   }
 
-  for (const file of config.context.requiredFiles) {
-    if (!existsSync(resolve(projectRoot, file))) {
-      errors.push(`Arquivo de contexto ausente: ${file}`);
-    }
-  }
+  try { requiredContext(config); }
+  catch (error) { errors.push(error.message); }
 
   for (const directory of config.context.sourceRoots) {
     const path = resolve(projectRoot, directory);
@@ -206,10 +217,7 @@ function context(config) {
       node: process.version,
       scripts: packageJson.scripts,
     },
-    requiredContext: config.context.requiredFiles.map((file) => ({
-      file,
-      contents: readFileSync(resolve(projectRoot, file), "utf8").trim(),
-    })),
+    requiredContext: requiredContext(config),
     sourceFiles,
     guardrails: config.guardrails,
   };
