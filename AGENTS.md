@@ -19,4 +19,4 @@ Execute npm dentro de `web/` ou `admin/`, Go dentro de `backend/` e o Gradle Wra
 
 ## Arquivos privados e produção
 
-Credenciais, arquivos de ambiente, assinaturas, uploads e backups locais não devem entrar no Git. Nunca imprimir seus valores. `.local-migration/` contém os Gits originais e os relatórios privados da migração; mantenha essa pasta ignorada e local. Não acessar VM, banco remoto, Vercel nem publicar em lojas sem autorização específica para a operação.
+Credenciais, arquivos de ambiente, assinaturas, uploads e backups locais não devem entrar no Git. Nunca imprimir seus valores. `.local-migration/` contém os Gits originais e os relatórios privados da migração; mantenha essa pasta ignorada e local. Não acessar VM, banco remoto, Netlify/Vercel nem publicar em lojas sem autorização específica para a operação.

@@ -24,12 +24,20 @@ Execute cada comando a partir da pasta indicada. Consulte os guias internos para
 
 O repositório remoto é https://github.com/Kaiquii/SobraAi.git.
 
-Na Vercel, mantenha dois projetos conectados a esse repositório:
+No Netlify, mantenha os dois projetos existentes e troque apenas o repositório vinculado para `Kaiquii/SobraAi`. Assim, os nomes dos projetos e seus domínios atuais são preservados.
 
-- Aplicação web: `Root Directory = web`, com os comandos de build e variáveis do projeto web.
-- Administrativo: `Root Directory = admin`, com os comandos de build e variáveis do administrativo.
+| Projeto existente | URL atual | Base directory | Build command | Publish directory | Production branch |
+| --- | --- | --- | --- | --- | --- |
+| Web | https://sobra-ai.netlify.app/login | `web` | `npm run build` | `.next` | `main` |
+| Administrativo | https://sobra-ai-admin.netlify.app/login | `admin` | `npm run build` | `.next` | `main` |
 
-As variáveis de ambiente e os domínios continuam configurados em cada projeto da Vercel. A migração local não muda a conexão Git dos deploys existentes. Não há configuração de build da Vercel na raiz.
+Como cada aplicação instala e compila dentro da sua própria pasta, deixe Package directory vazio quando ele coincidir com Base directory. O caminho `.next` é relativo à pasta base de cada aplicação.
+
+Em cada projeto existente, acesse Project configuration > Developer settings > Continuous deployment > Repository > Manage repository > Link to a different repository e selecione `Kaiquii/SobraAi`. Ajuste as opções em Build settings conforme a tabela. Mantenha os nomes dos projetos, os domínios e as variáveis de ambiente já configuradas. Não crie outros projetos para substituir os atuais.
+
+Referências: [trocar o repositório vinculado](https://docs.netlify.com/build/git-workflows/repo-permissions-linking/) e [configuração de monorepos](https://docs.netlify.com/build/configure-builds/monorepos/).
+
+A preparação local e o push do monorepo não trocam a conexão Git dos projetos existentes no Netlify. Essa troca é uma operação separada no painel. Não há configuração de build do Netlify na raiz do repositório.
 
 No back-end, use `backend/` como contexto Docker e execute os comandos de operação a partir dessa pasta. O `docker-compose.yml` local foi preservado com a configuração existente e está ignorado por conter credenciais. Em novos clones, copie `docker-compose.example.yml` para `docker-compose.yml` e configure as variáveis localmente a partir de `.env.example`. A publicação mobile continua seguindo os guias Android e Apple em `mobile/`. Um commit comum não atualiza automaticamente aplicativos já instalados; preserve a compatibilidade da API.
 
