@@ -36,7 +36,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" className="h-full antialiased" suppressHydrationWarning>
-      <head>
+      <body className="min-h-full flex flex-col">
+        <Providers>{children}</Providers>
         <Script
           id="sobra-ai-theme-bootstrap"
           strategy="beforeInteractive"
@@ -44,9 +45,6 @@ export default function RootLayout({
             __html: THEME_BOOTSTRAP_SCRIPT,
           }}
         />
-      </head>
-      <body className="min-h-full flex flex-col">
-        <Providers>{children}</Providers>
       </body>
     </html>
   );

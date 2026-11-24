@@ -40,15 +40,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" className="h-full" suppressHydrationWarning>
-      <head>
+      <body className="min-h-full antialiased">
+        <Providers>{children}</Providers>
         <Script
           id="sobra-ai-admin-theme-bootstrap"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: themeScript }}
         />
-      </head>
-      <body className="min-h-full antialiased">
-        <Providers>{children}</Providers>
       </body>
     </html>
   );
