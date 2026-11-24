@@ -1,0 +1,8 @@
+# A pasta base de cada site permanece configurada no painel Netlify.
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+# Gera as funções, redirects e assets necessários ao Next.js no Netlify.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

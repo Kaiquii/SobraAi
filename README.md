@@ -31,7 +31,7 @@ No Netlify, mantenha os dois projetos existentes e troque apenas o repositório 
 | Web | https://sobra-ai.netlify.app/login | `web` | `npm run build` | `.next` | `main` |
 | Administrativo | https://sobra-ai-admin.netlify.app/login | `admin` | `npm run build` | `.next` | `main` |
 
-Como cada aplicação instala e compila dentro da sua própria pasta, deixe Package directory vazio quando ele coincidir com Base directory. O caminho `.next` é relativo à pasta base de cada aplicação.
+Como cada aplicação instala e compila dentro da sua própria pasta, deixe Package directory vazio quando ele coincidir com Base directory. O caminho `.next` é relativo à pasta base de cada aplicação. Os arquivos `web/netlify.toml` e `admin/netlify.toml` declaram o adaptador oficial `@netlify/plugin-nextjs`, que prepara funções, redirects e assets do Next.js. Essa declaração evita uma publicação estática incompleta quando a detecção automática do framework não ocorre após trocar o repositório.
 
 Em cada projeto existente, acesse Project configuration > Developer settings > Continuous deployment > Repository > Manage repository > Link to a different repository e selecione `Kaiquii/SobraAi`. Ajuste as opções em Build settings conforme a tabela. Mantenha os nomes dos projetos, os domínios e as variáveis de ambiente já configuradas. Não crie outros projetos para substituir os atuais.
 

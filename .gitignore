@@ -23,6 +23,7 @@ Local.xcconfig
 node_modules/
 .next/
 .vercel/
+.netlify/
 .gradle/
 .kotlin/
 .gocache/
