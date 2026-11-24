@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 
 import {
   applyBrowserTheme,
@@ -12,6 +12,7 @@ import {
 
 type ThemeState = {
   theme: Theme;
+  initializeTheme: () => void;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
 };
@@ -19,7 +20,13 @@ type ThemeState = {
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
-      theme: getInitialTheme(),
+      // O snapshot inicial deve ser idêntico no servidor e na hidratação.
+      theme: "light",
+      initializeTheme: () => {
+        const theme = getInitialTheme();
+        applyBrowserTheme(theme);
+        set({ theme });
+      },
       setTheme: (theme) => {
         applyBrowserTheme(theme);
         set({ theme });
@@ -34,6 +41,18 @@ export const useThemeStore = create<ThemeState>()(
     }),
     {
       name: THEME_STORAGE_KEY,
+      partialize: ({ theme }) => ({ theme }),
+      storage: createJSONStorage(() => ({
+        getItem: (name) => {
+          try { return window.localStorage.getItem(name); } catch { return null; }
+        },
+        setItem: (name, value) => {
+          try { window.localStorage.setItem(name, value); } catch { /* O tema continua funcionando sem storage. */ }
+        },
+        removeItem: (name) => {
+          try { window.localStorage.removeItem(name); } catch { /* Storage pode estar bloqueado. */ }
+        },
+      })),
     },
   ),
 );

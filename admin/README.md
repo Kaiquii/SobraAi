@@ -33,10 +33,13 @@ npm run dev
 
 Acesse [http://localhost:3000](http://localhost:3000). A rota inicial direciona para `/login`.
 
+O desenvolvimento usa Webpack para evitar o panic de resolução de módulos do Turbopack observado no Windows após a migração para o monorepo. O comando de produção continua `next build`. Para usar a porta 3002, execute `npm run dev -- --port 3002`. Alterações no script de desenvolvimento exigem iniciar novamente o servidor.
+
 ## Scripts
 
 ```bash
 npm run dev        # servidor de desenvolvimento
+npm run test       # regressões de cache e PWA
 npm run lint       # ESLint
 npm run typecheck  # verificação do TypeScript
 npm run build      # build de produção

@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Cada aplicação tem suas próprias dependências e lockfile no monorepo.
+  turbopack: { root: __dirname },
+  outputFileTracingRoot: __dirname,
   async headers() {
     const securityHeaders = [
       {

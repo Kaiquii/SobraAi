@@ -18,6 +18,10 @@ export function Providers({ children }: Readonly<{ children: React.ReactNode }>)
   const pathname = usePathname();
 
   useEffect(() => {
+    useThemeStore.getState().initializeTheme();
+  }, []);
+
+  useEffect(() => {
     const syncTheme = () => applyBrowserTheme(useThemeStore.getState().theme);
     const syncWhenVisible = () => {
       if (document.visibilityState === "visible") syncTheme();

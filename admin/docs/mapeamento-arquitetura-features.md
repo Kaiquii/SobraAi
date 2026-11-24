@@ -52,6 +52,12 @@ sobra-ai-admin/
 `-- .env.example
 ```
 
+## Desenvolvimento e cache do PWA
+
+O modo de desenvolvimento usa `next dev --webpack`, evitando o panic do Turbopack observado na resolução de módulos durante o HMR no Windows. `turbopack.root` e `outputFileTracingRoot` apontam para a pasta do admin, que mantém suas próprias dependências no monorepo. O build de produção mantém o compilador padrão do Next.js.
+
+Em desenvolvimento, `PwaRegistrar` remove o registro de service worker do escopo raiz e os caches com prefixo `sobra-ai-admin-`. Em produção, o worker guarda somente os ícones da marca e assets em `/_next/static/`, com limite de entradas. Navegações, HTML, API, RSC e HMR seguem a rede. A ativação remove apenas caches antigos do próprio admin; falhas de armazenamento não impedem a carga dos assets. As regressões são executadas por `npm run test`.
+
 ## Camada de rotas: `app`
 
 As páginas são pontos de entrada finos: declaram metadata e renderizam a view principal da feature. Regras de negócio, stores e chamadas HTTP não devem ser implementadas diretamente nas páginas.

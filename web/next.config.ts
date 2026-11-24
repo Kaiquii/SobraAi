@@ -5,6 +5,9 @@ const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL
   : null;
 
 const nextConfig: NextConfig = {
+  // Cada aplicação tem suas próprias dependências e lockfile no monorepo.
+  turbopack: { root: __dirname },
+  outputFileTracingRoot: __dirname,
   images: {
     remotePatterns: [
       ...(apiUrl

@@ -16,7 +16,7 @@ Execute cada comando a partir da pasta indicada. Consulte os guias internos para
 | Pasta | Preparação | Validação |
 | --- | --- | --- |
 | `web/` | `npm ci` | `npm run ai:doctor` e `npm run ai:check` |
-| `admin/` | `npm ci` | `npm run lint`, `npm run typecheck` e `npm run build` |
+| `admin/` | `npm ci` | `npm run test`, `npm run lint`, `npm run typecheck` e `npm run build` |
 | `backend/` | `go mod download` | `.\scripts\test.ps1` no Windows ou `sh ./scripts/test.sh` no Linux/macOS |
 | `mobile/` | JDK e SDKs descritos no projeto | `.\gradlew.bat harnessVerify` no Windows; validação Apple complementar no Mac |
 

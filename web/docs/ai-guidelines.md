@@ -20,6 +20,10 @@ Este arquivo define regras permanentes para qualquer IA ou pessoa que trabalhar 
 - Não executar checkout, switch, reset, stash ou exclusão de branches/worktrees automaticamente. A correção de divergência depende da orientação do usuário; não descartar alterações para passar o harness.
 - A regra não autoriza commit ou push. `ai:context` e `ai:doctor` validam `requiredBranch`; `ai:check:quick` e `ai:check` passam pela mesma proteção antes das verificações. O harness apenas consulta a branch, sem realizar operações de escrita no Git.
 
+## Automação de interface: somente navegador
+
+Por orientação permanente do usuário em 24/11/2026, a verificação visual usa somente abas e APIs do navegador. É proibido controlar o PC, usar automação nativa de janelas, capturar a área de trabalho ou emitir atalhos de teclado do sistema, inclusive para contornar uma falha da conexão do navegador. Se a conexão falhar, informar a limitação e continuar apenas com ferramentas de navegador. A regra geral está em `../AGENTS.md` desde a pasta `web/`.
+
 ## Execução local do projeto
 
 - Somente o usuário inicia o projeto e controla seu servidor local.
