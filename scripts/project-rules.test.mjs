@@ -82,10 +82,13 @@ test("o contexto real do harness web inclui o conteúdo das regras gerais e loca
 
 test("todos os projetos carregam as regras globais antes dos documentos locais", () => {
   for (const project of ["web", "admin", "backend", "mobile"]) {
-    const [agents, globalRules, localAgents] = loadProjectRules([project]);
+    const [agents, globalRules, gitRules, localAgents] = loadProjectRules([project]);
     assert.equal(agents.file, "AGENTS.md");
     assert.equal(globalRules.file, "docs/rules.md");
     assert.match(globalRules.contents, /Ajustes de backend antes do frontend/);
+    assert.equal(gitRules.file, "docs/git.md");
+    assert.match(gitRules.contents, /Faça \*\*commit\*\* somente se o usuário pedir explicitamente/);
+    assert.match(gitRules.contents, /Faça \*\*push\*\* somente se o usuário pedir explicitamente/);
     assert.equal(localAgents.file, `${project}/AGENTS.md`);
   }
 });

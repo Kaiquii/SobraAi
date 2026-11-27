@@ -26,7 +26,7 @@ Use `node scripts/project-rules.mjs --index --project admin` para localizar os d
 
 Antes da entrega, revisar o diff contra as regras carregadas, registrar o que foi validado e informar lacunas. Carregar documentos ou passar em testes não comprova, por si só, cumprimento de todas as regras. Em caso de conflito real não resolvido pelas instruções atuais do usuário, preservar o trabalho e explicar a divergência antes da ação afetada.
 
-Commit e push continuam permitidos **somente quando autorizados pelo usuário para a tarefa em andamento**, na `main`; não são uma etapa implícita de implementação ou validação. Somente o usuário inicia, reinicia e controla os servidores da aplicação. A interação visual continua exclusivamente no navegador, conforme a seção abaixo.
+Somente o usuário inicia, reinicia e controla os servidores da aplicação. A interação visual continua exclusivamente no navegador, conforme a seção abaixo.
 
 ## Ajustes entre backend e frontend
 
@@ -34,7 +34,9 @@ As [regras comuns](docs/rules.md) são carregadas pelo harness em todos os proje
 
 ## Git e preservação
 
-Trabalhe somente na `main`. Confira `git branch --show-current` e `git status --short` antes de alterações e antes de commits ou pushes autorizados. Não crie branches, worktrees ou repositórios Git internos. Preserve alterações existentes. Commit, push e publicação exigem autorização do usuário.
+Trabalhe somente na `main`. Confira `git branch --show-current` e `git status --short` antes de alterações e antes de commits ou pushes autorizados. Não crie branches, worktrees ou repositórios Git internos. Preserve alterações existentes e o índice do Git.
+
+Commit, push e publicação exigem autorização explícita para cada operação na tarefa atual. Uma autorização de deploy, acesso à VM ou permissão genérica não autoriza commit ou push. Siga a [regra de autorização do Git](docs/git.md), carregada pelo harness nos quatro projetos.
 
 ## Comandos e validação
 
