@@ -21,17 +21,12 @@ object PlayIntegrityProtection {
     private const val cloudProjectNumber = 800491222292L
     private val providerMutex = Mutex()
 
-    private var integrityManager: StandardIntegrityManager? = null
+    private lateinit var applicationContext: Context
+    private val integrityManager by lazy { IntegrityManagerFactory.createStandard(applicationContext) }
     private var tokenProvider: StandardIntegrityManager.StandardIntegrityTokenProvider? = null
 
     fun initialize(context: Context) {
-        if (integrityManager == null) {
-            integrityManager = IntegrityManagerFactory.createStandard(context.applicationContext)
-        }
-    }
-
-    suspend fun warmUp() {
-        prepareProvider()
+        applicationContext = context.applicationContext
     }
 
     suspend fun newToken(path: String, email: String): Pair<String, String> {
@@ -74,10 +69,7 @@ object PlayIntegrityProtection {
     private suspend fun prepareProvider(): StandardIntegrityManager.StandardIntegrityTokenProvider =
         providerMutex.withLock {
             tokenProvider ?: run {
-                val manager = requireNotNull(integrityManager) {
-                    "Play Integrity must be initialized when the app starts."
-                }
-                manager.prepareIntegrityToken(
+                integrityManager.prepareIntegrityToken(
                     StandardIntegrityManager.PrepareIntegrityTokenRequest.builder()
                         .setCloudProjectNumber(cloudProjectNumber)
                         .build()

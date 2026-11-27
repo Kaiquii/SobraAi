@@ -13,31 +13,36 @@ import com.example.appfinanceiro.core.data.*
 import com.example.appfinanceiro.core.network.*
 import com.example.appfinanceiro.core.security.PlayIntegrityProtection
 import com.example.appfinanceiro.platform.*
-import kotlinx.coroutines.launch
 
 /** Android host: native services and system lifecycle only. All application screens are common. */
 class MainActivity : FragmentActivity() {
     private lateinit var controller: AppController
     private lateinit var native: AndroidNativeFeatures
-    private val fileClient by lazy { createPlatformHttpClient() }
+    private var windowActive = false
+    private val fileClient = lazy(::createPlatformHttpClient)
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         PlayIntegrityProtection.initialize(applicationContext)
-        lifecycleScope.launch { runCatching { PlayIntegrityProtection.warmUp() } }
         val session = SessionManager(this)
         val auth = AuthRepository()
         native = AndroidNativeFeatures(this)
-        controller = AppController(auth::login, session, AndroidBiometrics(this), lifecycleScope)
+        controller = AppController(auth::login, session, AndroidBiometrics(this), lifecycleScope,
+            canRevealUnlockedSession = { windowActive })
         val services = UiServices(session, FinanceRepository(), auth,
             KtorFinanceFiles(fileClient, ApiConfiguration(BuildConfig.API_BASE_URL)), native, controller, native, BuildConfig.API_BASE_URL,
             installationHint = "Atualize ou instale o app pela Google Play.", updates = AndroidAppUpdates(native), patrimony = AndroidApiClient.patrimony,
             investmentCategories = AndroidApiClient.patrimony)
         setContent { SobraAiApp(services) }
     }
-    override fun onStart() {
-        super.onStart()
+    override fun onResume() {
+        super.onResume()
+        windowActive = true
         if (::controller.isInitialized) controller.enterForeground()
+    }
+    override fun onPause() {
+        windowActive = false
+        super.onPause()
     }
     override fun onStop() {
         if (::native.isInitialized && !native.externalInteraction) {
@@ -48,7 +53,7 @@ class MainActivity : FragmentActivity() {
     }
     override fun onDestroy() {
         if (::native.isInitialized) native.cancelInteractions()
-        fileClient.close()
+        if (fileClient.isInitialized()) fileClient.value.close()
         super.onDestroy()
     }
 }

@@ -8,13 +8,15 @@ import com.example.appfinanceiro.core.network.*
 import com.example.appfinanceiro.core.network.auth.KtorAuthApi
 import kotlinx.coroutines.*
 import platform.LocalAuthentication.*
+import platform.UIKit.UIApplication
+import platform.UIKit.UIApplicationState.UIApplicationStateActive
 import platform.UIKit.UIViewController
 import kotlin.coroutines.resume
 
 /** The Swift host owns exactly one instance, including its Keychain store and HTTP client. */
 class IosApp(apiBaseUrl: String, sessionService: String) {
     private val scope = MainScope()
-    private val client = createPlatformHttpClient()
+    private val client = lazy(::createPlatformHttpClient)
     private val configuration = ApiConfiguration(apiBaseUrl)
     private val transport = ApiTransport(client, configuration)
     private val authApi = KtorAuthApi(transport)
@@ -24,7 +26,9 @@ class IosApp(apiBaseUrl: String, sessionService: String) {
     private val native = IosNativeFeatures()
     private val files = KtorFinanceFiles(client, configuration)
     private val biometrics = AppleBiometrics()
-    private val controller = AppController(auth::login, session, biometrics, scope)
+    private var sceneActive = false
+    private val controller = AppController(auth::login, session, biometrics, scope,
+        canRevealUnlockedSession = { sceneActive && UIApplication.sharedApplication.applicationState == UIApplicationStateActive })
     private val patrimony = SharedPatrimonyRepository(transport)
     private val services = br.com.sobraai.ui.runtime.UiServices(session, finance, auth, files, native, controller,
         IosReportFiles(files, native), apiBaseUrl, codeDeliveryAvailable = false, patrimony = patrimony, investmentCategories = patrimony)
@@ -33,9 +37,22 @@ class IosApp(apiBaseUrl: String, sessionService: String) {
         SobraAiApp(services)
     }.also { native.host = it }
 
-    fun enterBackground() { native.cancelInteractions(); controller.enterBackground() }
-    fun enterForeground() { controller.enterForeground() }
-    fun close() { native.cancelInteractions(); scope.cancel(); client.close() }
+    fun enterBackground() {
+        sceneActive = false
+        native.cancelInteractions()
+        controller.enterBackground()
+    }
+    fun enterInactive() { sceneActive = false }
+    fun enterForeground() {
+        sceneActive = true
+        controller.enterForeground()
+    }
+    fun canKeepStartupLoginVisible() = controller.canKeepStartupLoginVisible()
+    fun close() {
+        native.cancelInteractions()
+        scope.cancel()
+        if (client.isInitialized()) client.value.close()
+    }
 }
 
 private class AppleBiometrics : BiometricAuthenticator {

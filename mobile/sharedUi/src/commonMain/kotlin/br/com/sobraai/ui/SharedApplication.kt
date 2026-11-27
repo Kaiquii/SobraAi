@@ -41,6 +41,14 @@ fun SobraAiApp(services: UiServices) {
     val snackbars = remember { SnackbarHostState() }
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
     val reportBottomBarHeight = remember { { height: Int -> bottomBarHeightPx = height } }
+    LaunchedEffect(controller, state.route) {
+        if (state.route == AppRoute.Locked) {
+            // A frame gets to draw the login before the native prompt covers it.
+            withFrameNanos { }
+            withFrameNanos { }
+            controller.onLockedScreenReady()
+        }
+    }
     LaunchedEffect(services) { snackbars.collectAppNotifications(services.messages) }
     LaunchedEffect(services.session) {
         services.session.token.collect { token ->

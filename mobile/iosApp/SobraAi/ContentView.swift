@@ -1,6 +1,9 @@
+import Combine
 import SwiftUI
 import UIKit
 import SobraAiUI
+
+private let startupBackground = UIColor(named: "StartupBackground") ?? .systemBackground
 
 @MainActor
 final class AppRuntime: ObservableObject {
@@ -40,16 +43,25 @@ struct SobraAiApplication: App {
                         Text("Configure o endereço HTTPS da API no projeto iOS para entrar no SobraAi.")
                     }.padding()
                 }
-                // Hide credentials and financial data from the app switcher and inactive scenes.
-                if phase != .active {
-                    Color(uiColor: .systemBackground).ignoresSafeArea()
-                    Text("SobraAi").font(.title).accessibilityLabel("Aplicativo protegido")
+                // The shared startup login has empty, disabled fields while Face ID is pending.
+                if phase != .active && (phase != .inactive || runtime.app?.canKeepStartupLoginVisible() != true) {
+                    Color(uiColor: startupBackground).ignoresSafeArea()
+                    Image("StartupIcon")
+                        .accessibilityLabel("Aplicativo protegido")
                 }
             }
+            .background(Color(uiColor: startupBackground).ignoresSafeArea())
             .onAppear {
                 if phase == .active { runtime.app?.enterForeground() }
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                runtime.app?.enterInactive()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                if phase == .active { runtime.app?.enterForeground() }
+            }
             .onChange(of: phase) { next in
+                if next == .inactive { runtime.app?.enterInactive() }
                 if next == .background { runtime.app?.enterBackground() }
                 if next == .active { runtime.app?.enterForeground() }
             }

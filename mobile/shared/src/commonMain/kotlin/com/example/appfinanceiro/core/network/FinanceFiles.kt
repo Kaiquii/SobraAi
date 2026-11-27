@@ -31,14 +31,16 @@ interface FinanceFilesDataSource {
 }
 
 /** File boundary for Apple/KMP. Existing Android streaming/Retrofit entry points stay intact. */
-class KtorFinanceFiles(private val client: HttpClient, private val configuration: ApiConfiguration) : FinanceFilesDataSource {
+class KtorFinanceFiles(private val client: Lazy<HttpClient>, private val configuration: ApiConfiguration) : FinanceFilesDataSource {
+    constructor(client: HttpClient, configuration: ApiConfiguration) : this(lazyOf(client), configuration)
+
     override suspend fun export(token: String, request: ExportRequest): FinanceFile {
         require(request.month in 1..12 && request.year in 1..9999)
         require(request.months == null || request.months in 1..120)
         require(request.compareMonth == null || request.compareMonth in 1..12)
         val fallback = "${request.kind.api}-${request.year}-${request.month.toString().padStart(2, '0')}.${request.format.api}"
         return safely {
-            client.prepareGet(configuration.baseUrl + "api/reports/export") {
+            client.value.prepareGet(configuration.baseUrl + "api/reports/export") {
                 header(HttpHeaders.Authorization, "Bearer $token")
                 parameter("type", request.kind.api); parameter("month", request.month); parameter("year", request.year); parameter("format", request.format.api)
                 request.compareMonth?.let { parameter("compare_month", it) }; request.compareYear?.let { parameter("compare_year", it) }
@@ -59,7 +61,7 @@ class KtorFinanceFiles(private val client: HttpClient, private val configuration
         require(photo.bytes.isNotEmpty() && photo.bytes.size <= 15 * 1024 * 1024) { "Selecione uma foto de até 15 MB." }
         require(photo.mime == "image/jpeg" && photo.bytes.size > 2 && photo.bytes[0] == 0xff.toByte() && photo.bytes[1] == 0xd8.toByte()) { "A foto precisa estar em JPEG." }
         return safely {
-            client.preparePatch(configuration.baseUrl + "api/users/profile/photo") {
+            client.value.preparePatch(configuration.baseUrl + "api/users/profile/photo") {
                 header(HttpHeaders.Authorization, "Bearer $token")
                 setBody(MultiPartFormDataContent(formData { append("photo", photo.bytes, Headers.build {
                     append(HttpHeaders.ContentType, "image/jpeg"); append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
@@ -75,7 +77,7 @@ class KtorFinanceFiles(private val client: HttpClient, private val configuration
         })
         require(url.protocol == URLProtocol.HTTPS && url.user == null && url.password == null) { "A foto deve usar HTTPS." }
         return safely {
-            client.prepareGet(url) {
+            client.value.prepareGet(url) {
                 if (url.host == base.host && url.port == base.port) header(HttpHeaders.Authorization, "Bearer $token")
             }.execute { response ->
                 // A public CDN failure must not invalidate the user's account.

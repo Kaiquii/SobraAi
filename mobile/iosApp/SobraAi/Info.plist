@@ -13,7 +13,10 @@
     <key>NSPhotoLibraryUsageDescription</key><string>Selecione uma imagem para a foto do seu perfil no SobraAi.</string>
     <key>NSMicrophoneUsageDescription</key><string>Use o microfone para ditar uma mensagem ao assistente do SobraAi.</string>
     <key>NSSpeechRecognitionUsageDescription</key><string>Converta sua fala em texto para revisar antes de enviar ao assistente do SobraAi.</string>
-    <key>UILaunchScreen</key><dict/>
+    <key>UILaunchScreen</key><dict>
+        <key>UIColorName</key><string>StartupBackground</string>
+        <key>UIImageName</key><string>StartupIcon</string>
+    </dict>
     <key>CADisableMinimumFrameDurationOnPhone</key><true/>
     <key>LSRequiresIPhoneOS</key><true/>
     <key>CFBundleDevelopmentRegion</key><string>pt_BR</string>

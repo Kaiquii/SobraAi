@@ -51,6 +51,7 @@ class ProfileBiometricPreferenceTest {
         val reopened = app(backgroundScope, memory, sensor)
         runCurrent()
         assertEquals(AppRoute.Locked, reopened.state.value.route)
+        reopened.onLockedScreenReady()
         reopened.enterForeground(); runCurrent()
         assertEquals(2, sensor.calls)
         assertEquals(AppRoute.Home, reopened.state.value.route)

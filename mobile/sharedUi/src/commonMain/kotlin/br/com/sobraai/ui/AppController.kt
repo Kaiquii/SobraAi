@@ -23,7 +23,8 @@ data class AppState(
     val busy: Boolean = false,
     val message: String? = null,
     val blockedEmail: String = "",
-    val blockedUntil: Long = 0
+    val blockedUntil: Long = 0,
+    val startupBiometrics: Boolean = false
 )
 
 /** Scoped to one host instance; credentials never enter a saveable Compose state. */
@@ -32,7 +33,8 @@ class AppController(
     private val session: SessionStore,
     private val biometrics: BiometricAuthenticator,
     private val scope: CoroutineScope,
-    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() }
+    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+    private val canRevealUnlockedSession: () -> Boolean = { true }
 ) {
     val biometricKind: BiometricKind get() = biometrics.kind()
     private val mutable = MutableStateFlow(AppState())
@@ -46,6 +48,8 @@ class AppController(
     private var background = false
     private var foreground = false
     private var automaticUnlockPending = false
+    private var lockedScreenReady = false
+    private var unlockResultWhileInactive: AppState? = null
     private var logoutPending = false
     var home: HomePresenter? = null
         private set
@@ -62,14 +66,19 @@ class AppController(
         generation++
         operation?.cancel()
         automaticUnlockPending = false
+        lockedScreenReady = false
+        unlockResultWhileInactive = null
         mutable.value = AppState()
         operation = scope.launch(start = CoroutineStart.LAZY) {
             try {
-                token = session.token.first()?.takeIf { it.isNotBlank() }
-                email = session.userEmail.first()
-                biometricEnabled = session.isBiometricEnabledForUser(email).first()
-                mutable.value = AppState(if (token == null) AppRoute.Login else if (biometricEnabled) AppRoute.Locked else AppRoute.Home)
-                automaticUnlockPending = mutable.value.route == AppRoute.Locked
+                val saved = session.readSession()
+                currentCoroutineContext().ensureActive()
+                token = saved.token?.takeIf { it.isNotBlank() }
+                email = saved.email
+                biometricEnabled = saved.isBiometricEnabledForUser(email)
+                val route = if (token == null) AppRoute.Login else if (biometricEnabled) AppRoute.Locked else AppRoute.Home
+                automaticUnlockPending = route == AppRoute.Locked
+                mutable.value = AppState(route, startupBiometrics = automaticUnlockPending)
                 unlockAutomaticallyIfReady()
             } catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) { mutable.value = AppState(AppRoute.StorageError, message = "Não foi possível acessar a sessão segura. Desbloqueie o aparelho e tente novamente.") }
@@ -100,8 +109,9 @@ class AppController(
     }
     suspend fun refreshIdentity() {
         require(mutable.value.route == AppRoute.Home)
-        email = session.userEmail.first()
-        biometricEnabled = session.isBiometricEnabledForUser(email).first()
+        val saved = session.readSession()
+        email = saved.email
+        biometricEnabled = saved.isBiometricEnabledForUser(email)
     }
     suspend fun setBiometricEnabled(enabled: Boolean) {
         require(mutable.value.route == AppRoute.Home && token != null)
@@ -199,6 +209,7 @@ class AppController(
         email = result.user.email
         biometricEnabled = enabled
         pending = null
+        lockedScreenReady = false
         mutable.value = AppState(if (enabled && background) AppRoute.Locked else AppRoute.Home)
         automaticUnlockPending = mutable.value.route == AppRoute.Locked
     }
@@ -213,15 +224,20 @@ class AppController(
                 val accepted = biometrics.authenticate()
                 currentCoroutineContext().ensureActive()
                 if (version != generation || mutable.value.route != AppRoute.Locked) return@launch
-                mutable.value = AppState(if (accepted && !background) AppRoute.Home else AppRoute.Locked,
-                    message = if (accepted) null else "Autenticação cancelada ou indisponível. Tente novamente ou entre com sua senha.")
+                finishUnlock(AppState(if (accepted && !background) AppRoute.Home else AppRoute.Locked,
+                    message = if (accepted) null else "Autenticação cancelada ou indisponível. Tente novamente ou entre com sua senha."))
             } catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) {
                 if (version == generation && mutable.value.route == AppRoute.Locked) {
-                    mutable.value = AppState(AppRoute.Locked, message = "Não foi possível autenticar com biometria.")
+                    finishUnlock(AppState(AppRoute.Locked, message = "Não foi possível autenticar com biometria."))
                 }
             }
         }
+    }
+
+    private fun finishUnlock(result: AppState) {
+        if (!background && !canRevealUnlockedSession()) unlockResultWhileInactive = result
+        else mutable.value = result
     }
 
     fun enterBackground() {
@@ -238,10 +254,12 @@ class AppController(
     fun lock() {
         background = true
         foreground = false
+        unlockResultWhileInactive = null
         // Hosts call this only for real background, never for the biometric sheet's inactive scene.
         if (biometricEnabled && mutable.value.route == AppRoute.Home) {
             workspace?.close(); workspace = null
             home?.clear(); home = null
+            lockedScreenReady = false
             mutable.value = AppState(AppRoute.Locked)
         }
         if (mutable.value.route == AppRoute.Locked) {
@@ -249,6 +267,8 @@ class AppController(
                 generation++
                 operation?.cancel()
                 mutable.value = AppState(AppRoute.Locked)
+            } else if (mutable.value.startupBiometrics) {
+                mutable.value = mutable.value.copy(startupBiometrics = false)
             }
             automaticUnlockPending = true
         }
@@ -257,11 +277,30 @@ class AppController(
     fun enterForeground() {
         background = false
         foreground = true
+        val pendingUnlock = unlockResultWhileInactive
+        if (pendingUnlock != null) {
+            if (canRevealUnlockedSession()) {
+                unlockResultWhileInactive = null
+                mutable.value = pendingUnlock
+            }
+            return
+        }
+        unlockAutomaticallyIfReady()
+    }
+
+    internal fun canKeepStartupLoginVisible(): Boolean {
+        val current = mutable.value
+        return !background && lockedScreenReady && current.route == AppRoute.Locked && current.startupBiometrics
+    }
+
+    internal fun onLockedScreenReady() {
+        if (mutable.value.route != AppRoute.Locked) return
+        lockedScreenReady = true
         unlockAutomaticallyIfReady()
     }
 
     private fun unlockAutomaticallyIfReady() {
-        if (foreground && !background && automaticUnlockPending &&
+        if (foreground && !background && automaticUnlockPending && lockedScreenReady && canRevealUnlockedSession() &&
             mutable.value.route == AppRoute.Locked && !mutable.value.busy) {
             unlock()
         }
@@ -273,6 +312,7 @@ class AppController(
         logoutPending = true
         generation++
         automaticUnlockPending = false
+        unlockResultWhileInactive = null
         operation?.cancel()
         workspace?.close(); workspace = null
         home?.clear(); home = null; pending = null; token = null

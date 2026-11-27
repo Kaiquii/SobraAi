@@ -6,7 +6,7 @@ import com.example.appfinanceiro.core.network.auth.KtorAuthApi
 
 object AndroidApiClient {
     private val transport by lazy {
-        ApiTransport(createPlatformHttpClient(), ApiConfiguration(BuildConfig.API_BASE_URL), ::ApiRequestException)
+        ApiTransport(lazy(::createPlatformHttpClient), ApiConfiguration(BuildConfig.API_BASE_URL), ::ApiRequestException)
     }
     val patrimony by lazy { com.example.appfinanceiro.core.data.SharedPatrimonyRepository(transport) }
     val financeApi: SharedFinanceApi by lazy { KtorFinanceApi(transport) }

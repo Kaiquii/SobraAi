@@ -292,7 +292,8 @@ fun HomeScreen(
 
             item {
                 ResumoFinanceiroSection(
-                    isLoading = uiState.isSummaryLoading || uiState.isIncomesLoading,
+                    isLoading = uiState.isSummaryLoading || uiState.isIncomesLoading ||
+                        !uiState.hasLoadedSummary || !uiState.hasLoadedIncomes,
                     errorMessage = uiState.summaryError ?: uiState.incomesError,
                     errorHandledExternally = true,
                     onRetry = {
@@ -316,7 +317,7 @@ fun HomeScreen(
 
             item {
                 DespesasHeaderSection(
-                    isLoading = uiState.isExpensesLoading,
+                    isLoading = uiState.isExpensesLoading || !uiState.hasLoadedExpenses,
                     hasLoadedOnce = uiState.hasLoadedExpenses,
                     errorMessage = uiState.expensesError,
                     errorHandledExternally = true,

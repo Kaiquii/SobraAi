@@ -15,7 +15,9 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
 import kotlinx.io.IOException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 
 class ApiConfiguration(baseUrl: String) {
@@ -43,10 +45,16 @@ internal fun HttpClientConfig<*>.configureFinanceHttpClient() {
 }
 
 class ApiTransport(
-    private val client: HttpClient,
+    private val client: Lazy<HttpClient>,
     private val configuration: ApiConfiguration,
     private val apiErrorFactory: (Int, String?) -> Exception = { status, message -> ApiResponseException(status, message) }
 ) {
+    constructor(
+        client: HttpClient,
+        configuration: ApiConfiguration,
+        apiErrorFactory: (Int, String?) -> Exception = { status, message -> ApiResponseException(status, message) }
+    ) : this(lazyOf(client), configuration, apiErrorFactory)
+
     suspend inline fun <reified T> request(
         method: String, path: String, authorization: String? = null,
         query: Map<String, Any?> = emptyMap(), body: String? = null,
@@ -82,7 +90,8 @@ class ApiTransport(
         body: String?, authenticated: Boolean
     ): String {
         try {
-            val response = client.request(configuration.baseUrl + path) {
+            val httpClient = if (client.isInitialized()) client.value else withContext(Dispatchers.Default) { client.value }
+            val response = httpClient.request(configuration.baseUrl + path) {
                 this.method = HttpMethod.parse(method)
                 accept(ContentType.Application.Json)
                 authorization?.let { header(HttpHeaders.Authorization, it) }

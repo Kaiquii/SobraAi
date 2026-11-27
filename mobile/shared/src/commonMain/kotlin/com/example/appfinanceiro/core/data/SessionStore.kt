@@ -1,6 +1,7 @@
 package com.example.appfinanceiro.core.data
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 
@@ -12,6 +13,7 @@ interface SessionStore {
     val userAvatarUrl: Flow<String>
     val userAvatarCacheVersion: Flow<Long?>
     val biometricEnabledEmails: Flow<Set<String>>
+    suspend fun readSession(): SessionData
     suspend fun saveToken(token: String, name: String, email: String, role: String, avatarUrl: String? = null)
     suspend fun saveAvatarUrl(avatarUrl: String?, cacheVersion: Long? = null)
     fun isBiometricEnabledForUser(email: String): Flow<Boolean>
@@ -28,7 +30,9 @@ data class SessionData(
     val avatarUrl: String = "",
     val avatarCacheVersion: Long? = null,
     val biometricEnabledEmails: Set<String> = emptySet()
-)
+) {
+    fun isBiometricEnabledForUser(email: String): Boolean = email.trim().lowercase() in biometricEnabledEmails
+}
 
 interface SessionPersistence {
     val data: Flow<SessionData>
@@ -44,6 +48,8 @@ class PersistentSessionStore(private val persistence: SessionPersistence) : Sess
     override val userAvatarCacheVersion = persistence.data.map { it.avatarCacheVersion }
     override val biometricEnabledEmails = persistence.data.map { it.biometricEnabledEmails }
 
+    override suspend fun readSession(): SessionData = persistence.data.first()
+
     override suspend fun saveToken(token: String, name: String, email: String, role: String, avatarUrl: String?) {
         persistence.update { current ->
             current.copy(token = token, name = name, email = email, role = role,
@@ -58,7 +64,7 @@ class PersistentSessionStore(private val persistence: SessionPersistence) : Sess
         }
     }
     override fun isBiometricEnabledForUser(email: String): Flow<Boolean> =
-        biometricEnabledEmails.map { email.trim().lowercase() in it }
+        persistence.data.map { it.isBiometricEnabledForUser(email) }
 
     override suspend fun setBiometricEnabledForUser(email: String, enabled: Boolean) {
         val normalizedEmail = email.trim().lowercase()

@@ -41,7 +41,7 @@ fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var senha by remember { mutableStateOf("") }
     val errorMessage = state.message.orEmpty()
-    val isLoading = state.busy
+    val isLoading = state.busy || state.startupBiometrics
     var now by remember { mutableStateOf(kotlin.time.Clock.System.now().toEpochMilliseconds()) }
     LaunchedEffect(state.blockedUntil) {
         do { now = kotlin.time.Clock.System.now().toEpochMilliseconds(); delay(1000) } while (now < state.blockedUntil)
@@ -64,7 +64,7 @@ fun LoginScreen(
             "Entre para continuar cuidando das suas finanças.", textAlign = TextAlign.Start)
         Spacer(Modifier.height(32.dp))
         AuthTextField(
-            label = "E-mail", value = email,
+            label = "E-mail", value = if (state.startupBiometrics) "" else email,
             onValueChange = { email = it.replace(" ", "").replace("\n", ""); clearError() },
             placeholder = "seu@email.com", enabled = !isLoading, keyboardType = KeyboardType.Email,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
@@ -72,7 +72,7 @@ fun LoginScreen(
             leadingIcon = Icons.Default.Email)
         Spacer(Modifier.height(20.dp))
         AuthPasswordField(
-            label = "Senha", value = senha,
+            label = "Senha", value = if (state.startupBiometrics) "" else senha,
             onValueChange = { senha = it.replace(" ", "").replace("\n", ""); clearError() },
             placeholder = "Digite a sua senha", enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
@@ -99,14 +99,15 @@ fun LoginScreen(
             } else "Entrar",
             isLoading = isLoading, enabled = !isLoginTemporarilyBlocked, onClick = ::login)
         if (state.route == AppRoute.Locked) {
+            val biometricKind = remember(controller) { controller.biometricKind }
             Spacer(Modifier.height(20.dp))
             OutlinedButton(onClick = { focusManager.clearFocus(); controller.unlock() }, enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))) {
-                Icon(biometricIcon(controller.biometricKind), null, tint = PrimaryBlue)
+                Icon(biometricIcon(biometricKind), null, tint = PrimaryBlue)
                 Spacer(Modifier.width(10.dp))
-                Text(if (controller.biometricKind == BiometricKind.Generic) "Entrar com biometria"
-                    else "Entrar com ${controller.biometricKind.label}",
+                Text(if (biometricKind == BiometricKind.Generic) "Entrar com biometria"
+                    else "Entrar com ${biometricKind.label}",
                     color = MaterialTheme.colorScheme.onBackground, textAlign = TextAlign.Center)
             }
         }
