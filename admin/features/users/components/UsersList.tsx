@@ -96,10 +96,18 @@ export function UsersList({
         >
           <table
             className={cn(
-              "w-full min-w-260 border-collapse",
+              "w-full border-collapse max-xl:table-fixed",
               fillsPage && "lg:h-full",
             )}
           >
+            <colgroup>
+              <col className="max-xl:w-1/4" />
+              <col className="max-xl:w-[15%]" />
+              <col className="max-xl:w-[11%]" />
+              <col className="max-xl:w-[18%]" />
+              <col className="max-xl:w-[14%]" />
+              <col className="max-xl:w-[17%]" />
+            </colgroup>
             <thead
               data-pagination-header
               className="bg-slate-100 dark:bg-slate-800"

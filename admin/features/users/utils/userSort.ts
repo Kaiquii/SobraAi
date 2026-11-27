@@ -1,3 +1,10 @@
+const lastActiveSortColumn = {
+  label: "Último uso",
+  first: { value: "last_active_desc", label: "Último uso (mais recente)" },
+  second: { value: "last_active_asc", label: "Último uso (mais antigo)" },
+  firstDirection: "descending",
+} as const;
+
 export const USER_SORT_COLUMNS = [
   {
     label: "Usuário / e-mail",
@@ -17,12 +24,7 @@ export const USER_SORT_COLUMNS = [
     second: { value: "access_desc", label: "Acesso (bloqueados primeiro)" },
     firstDirection: "ascending",
   },
-  {
-    label: "Último uso",
-    first: { value: "last_active_desc", label: "Último uso (mais recente)" },
-    second: { value: "last_active_asc", label: "Último uso (mais antigo)" },
-    firstDirection: "descending",
-  },
+  lastActiveSortColumn,
   {
     label: "Bloqueio",
     first: { value: "blocked_at_desc", label: "Bloqueio (mais recente)" },
@@ -37,5 +39,9 @@ export type UserSort = "" | UserSortColumn["first" | "second"]["value"];
 
 export const USER_SORT_OPTIONS = [
   { value: "", label: "Ordem padrão" },
-  ...USER_SORT_COLUMNS.flatMap(({ first, second }) => [first, second]),
+  lastActiveSortColumn.first,
+  lastActiveSortColumn.second,
+  ...USER_SORT_COLUMNS
+    .filter((column) => column !== lastActiveSortColumn)
+    .flatMap(({ first, second }) => [first, second]),
 ] satisfies { value: UserSort; label: string }[];
