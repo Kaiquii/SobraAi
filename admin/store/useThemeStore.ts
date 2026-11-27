@@ -2,6 +2,8 @@
 
 import { create } from "zustand";
 
+import { THEME_STORAGE_KEY } from "@/lib/theme";
+
 type ThemeState = {
   isDark: boolean;
   setIsDark: (isDark: boolean) => void;
@@ -15,15 +17,16 @@ function applyTheme(isDark: boolean) {
 
   document.documentElement.classList.toggle("dark", isDark);
   document.documentElement.style.colorScheme = isDark ? "dark" : "light";
-  window.localStorage.setItem("sobra-ai-admin-theme", isDark ? "dark" : "light");
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, isDark ? "dark" : "light");
+  } catch {
+    // A troca de tema continua disponível quando o armazenamento é bloqueado.
+  }
 }
 
 export const useThemeStore = create<ThemeState>((set) => ({
   isDark: false,
-  setIsDark: (isDark) => {
-    applyTheme(isDark);
-    set({ isDark });
-  },
+  setIsDark: (isDark) => set({ isDark }),
   toggleTheme: () => {
     set((state) => {
       const isDark = !state.isDark;

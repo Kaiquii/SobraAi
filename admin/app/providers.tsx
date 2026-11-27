@@ -13,10 +13,7 @@ export function Providers({ children }: ProvidersProps) {
   const setIsDark = useThemeStore((state) => state.setIsDark);
 
   useEffect(() => {
-    const storedTheme = window.localStorage.getItem("sobra-ai-admin-theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-    setIsDark(storedTheme ? storedTheme === "dark" : prefersDark);
+    setIsDark(document.documentElement.classList.contains("dark"));
   }, [setIsDark]);
 
   return (

@@ -1,11 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
-
 import { Providers } from "@/app/providers";
+import { themeBootstrapScript } from "@/lib/theme";
 
 import "./globals.css";
-
-const themeScript = `(function(){try{var key="sobra-ai-admin-theme";var saved=localStorage.getItem(key);var isDark=saved?saved==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",isDark);document.documentElement.style.colorScheme=isDark?"dark":"light"}catch(error){}})();`;
 
 export const metadata: Metadata = {
   title: {
@@ -40,13 +37,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" className="h-full" suppressHydrationWarning>
+      <head>
+        <meta name="color-scheme" content="light dark" />
+        {/* Executar durante a leitura do HTML, antes da montagem da página. */}
+        <script
+          id="sobra-ai-admin-theme-bootstrap"
+          dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
+        />
+      </head>
       <body className="min-h-full antialiased">
         <Providers>{children}</Providers>
-        <Script
-          id="sobra-ai-admin-theme-bootstrap"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{ __html: themeScript }}
-        />
       </body>
     </html>
   );
