@@ -6,6 +6,10 @@ Leia o [AGENTS.md do monorepo](../AGENTS.md) e execute `npm run ai:context` ante
 
 Commit e push somente quando autorizados; servidores da aplicação são iniciados e controlados exclusivamente pelo usuário.
 
+## Ajustes de API
+
+Siga as [regras comuns do SobraAi](../docs/rules.md). Quando a Web depender de uma mudança na API, faça e valide o ajuste no backend antes da integração Web.
+
 ## Git somente na main
 
 Orientação permanente do usuário em 04/11/2026:

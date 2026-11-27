@@ -42,16 +42,21 @@ export function loadProjectRules(projects, { root = monorepoRoot } = {}) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const projects = [];
-    let check = false;
+    const modes = new Set();
     for (let index = 2; index < process.argv.length; index++) {
       const arg = process.argv[index];
-      if (arg === "--check") check = true;
+      if (arg === "--check" || arg === "--index") modes.add(arg);
       else if (arg === "--project" && process.argv[index + 1] && !process.argv[index + 1].startsWith("--")) {
         projects.push(process.argv[++index]);
-      } else throw new Error("Use --project web|admin|backend|mobile (repetível) e/ou --check.");
+      } else throw new Error("Use --project web|admin|backend|mobile (repetível) e opcionalmente --check ou --index.");
     }
+    if (modes.size > 1) throw new Error("Escolha --check ou --index.");
     const rules = loadProjectRules(projects);
-    if (check) console.log(`[project-rules] ${rules.length} documentos obrigatórios válidos.`);
+    if (modes.has("--check")) console.log(`[project-rules] ${rules.length} documentos obrigatórios válidos.`);
+    else if (modes.has("--index")) {
+      console.log("[project-rules] Ordem de leitura. Execute sem --index para carregar o conteúdo completo.");
+      rules.forEach(({ file }, index) => console.log(`${index + 1}. ${file}`));
+    }
     else console.log(rules.map(({ file, contents }) => `\n--- REGRA: ${file} ---\n${contents}`).join("\n"));
   } catch (error) {
     console.error(`[project-rules] ${error.message}`);

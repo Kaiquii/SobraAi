@@ -37,48 +37,40 @@ export function useResponsivePageLimit({
 
     let animationFrame = 0;
     const container = containerRef.current;
-    const capacity = container?.querySelector<HTMLElement>(
-      "[data-pagination-capacity]",
-    );
 
     function calculateLimit() {
-      if (window.innerWidth < DESKTOP_BREAKPOINT) {
-        const viewportKey = [
-          window.innerWidth,
-          window.innerHeight,
-          window.devicePixelRatio,
-          "mobile",
-        ].join(":");
+      const viewport = window.visualViewport;
+      // A faixa de erro e os resultados podem alterar a área da tabela sem redimensionar a janela.
+      const viewportKey = [
+        window.innerWidth,
+        window.innerHeight,
+        window.devicePixelRatio,
+        viewport?.width,
+        viewport?.height,
+      ].join(":");
 
-        if (lastViewportKeyRef.current === viewportKey) return;
+      if (lastViewportKeyRef.current === viewportKey) return;
+
+      if (window.innerWidth < DESKTOP_BREAKPOINT) {
         lastViewportKeyRef.current = viewportKey;
         container?.style.removeProperty("--admin-table-row-height");
         return;
       }
 
+      const capacity = container?.querySelector<HTMLElement>("[data-pagination-capacity]");
       if (!capacity) return;
-
-      const viewportKey = [
-        window.innerWidth,
-        window.innerHeight,
-        window.devicePixelRatio,
-        capacity.clientWidth,
-        capacity.clientHeight,
-      ].join(":");
-
-      if (lastViewportKeyRef.current === viewportKey) return;
-      lastViewportKeyRef.current = viewportKey;
-
       const tableHeader = capacity.querySelector<HTMLElement>(
         "[data-pagination-header]",
       );
-      const tableHeaderHeight = tableHeader?.getBoundingClientRect().height ?? 0;
+      if (!tableHeader) return;
+      const tableHeaderHeight = tableHeader.getBoundingClientRect().height;
       const availableHeight =
         capacity.clientHeight -
         tableHeaderHeight -
         CALCULATION_SAFETY_SPACE;
 
       if (availableHeight <= 0) return;
+      lastViewportKeyRef.current = viewportKey;
 
       const nextLimit = Math.min(
         MAX_PAGE_LIMIT,
@@ -114,14 +106,19 @@ export function useResponsivePageLimit({
     window.visualViewport?.addEventListener("resize", scheduleCalculation);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    const resolutionQuery = window.matchMedia(
-      `(resolution: ${window.devicePixelRatio}dppx)`,
-    );
-    resolutionQuery.addEventListener("change", scheduleCalculation);
+    let resolutionQuery: MediaQueryList;
+    function watchCurrentResolution() {
+      resolutionQuery?.removeEventListener("change", watchCurrentResolution);
+      resolutionQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      resolutionQuery.addEventListener("change", watchCurrentResolution);
+      scheduleCalculation();
+    }
+    watchCurrentResolution();
 
-    const resizeObserver = new ResizeObserver(scheduleCalculation);
-    if (container) resizeObserver.observe(container);
-    if (capacity) resizeObserver.observe(capacity);
+    const contentObserver = new ResizeObserver(scheduleCalculation);
+    if (container) contentObserver.observe(container);
+    const capacity = container?.querySelector("[data-pagination-capacity]");
+    if (capacity) contentObserver.observe(capacity);
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
@@ -131,8 +128,8 @@ export function useResponsivePageLimit({
       window.removeEventListener("pageshow", scheduleCalculation);
       window.visualViewport?.removeEventListener("resize", scheduleCalculation);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      resolutionQuery.removeEventListener("change", scheduleCalculation);
-      resizeObserver.disconnect();
+      resolutionQuery.removeEventListener("change", watchCurrentResolution);
+      contentObserver.disconnect();
       container?.style.removeProperty("--admin-table-row-height");
     };
   }, [containerRef, isLayoutReady, onLimitChange, rowHeight]);

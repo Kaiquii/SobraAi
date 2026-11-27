@@ -1,4 +1,5 @@
 import type { UserRole } from "@/features/auth/types/auth";
+import type { UserSort } from "@/features/users/utils/userSort";
 import type { Pagination } from "@/lib/pagination";
 
 export type AdminUser = {
@@ -60,6 +61,7 @@ export type UsersListParams = {
   page: number;
   role?: Exclude<UserRoleFilter, "all">;
   search?: string;
+  sort?: Exclude<UserSort, "">;
   status?: Exclude<UserStatusFilter, "all">;
 };
 

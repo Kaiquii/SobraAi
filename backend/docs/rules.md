@@ -6,6 +6,10 @@ Antes de analisar, editar ou executar comandos, execute `go run ./cmd/harness -m
 
 Commit/push somente quando autorizados pelo usuário; servidores da aplicação são iniciados e controlados por ele. Comandos finitos de testes, build e contexto não iniciam o servidor da aplicação.
 
+## Ajustes de API
+
+Siga as [regras comuns do SobraAi](../../docs/rules.md). Implemente e valide as mudanças necessárias no backend antes da integração com Web, Admin ou Mobile. Preserve o contrato dos consumidores existentes.
+
 ## Git: Sempre Na Main
 
 - Nao criar novas branches para nenhuma tarefa, teste, deploy, harness ou subagente,

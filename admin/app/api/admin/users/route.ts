@@ -21,15 +21,17 @@ export async function GET(request: Request) {
 
   const search = searchParams.get("search")?.trim();
   const role = searchParams.get("role");
+  const sort = searchParams.get("sort");
   const status = searchParams.get("status");
 
   try {
-    const response = await backendApi.get<AdminUsersResponse>("/auth/users", {
+    const response = await backendApi.get<AdminUsersResponse>("/admin/users", {
       headers: { Authorization: `Bearer ${session.token}` },
       params: {
         ...pagination.params,
         ...(search ? { search } : {}),
         ...(role ? { role } : {}),
+        ...(sort ? { sort } : {}),
         ...(status ? { status } : {}),
       },
     });

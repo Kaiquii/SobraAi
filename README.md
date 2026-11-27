@@ -50,3 +50,5 @@ Os quatro repositórios Git originais foram preservados integralmente em `.local
 O novo histórico começa com o estado atual unificado. Os históricos antigos permanecem nos backups locais porque há arquivos de ambiente em commits anteriores; eles não são incorporados ao histórico publicável do monorepo.
 
 As instruções gerais para agentes estão em [AGENTS.md](AGENTS.md), complementadas pelas regras de cada projeto. O mapa [project-rules.json](project-rules.json) reúne os documentos obrigatórios. `node scripts/project-rules.mjs --check` valida o mapa dos quatro projetos; sem `--check`, o comando imprime o conteúdo atual das regras. Use `--project web`, `--project admin`, `--project backend` ou `--project mobile` para delimitar o contexto, repetindo a opção em tarefas entre projetos. Commit e push exigem autorização do usuário; somente ele inicia e controla os servidores da aplicação.
+
+As [regras comuns](docs/rules.md) incluem a ordem de leitura e os guias de cada projeto. Consulte a lista de documentos com `node scripts/project-rules.mjs --index`.

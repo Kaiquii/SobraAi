@@ -16,6 +16,8 @@
 
 ## Codigo
 
+- [ ] Mudanças necessárias na API foram implementadas e validadas antes da integração de frontend, conforme as regras comuns do monorepo.
+
 - [ ] A mudanca atende somente ao escopo solicitado.
 - [ ] O diff nao sobrescreve alteracoes preexistentes do usuario.
 - [ ] Erros retornam mensagens e status coerentes.

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "common": ["AGENTS.md"],
+  "common": ["AGENTS.md", "docs/rules.md"],
   "projects": {
     "web": [
       "web/AGENTS.md",

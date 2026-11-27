@@ -1,4 +1,4 @@
-import { Search, ShieldCheck, UserRoundCog, UsersRound, X } from "lucide-react";
+import { ArrowDownUp, Search, ShieldCheck, UserRoundCog, UsersRound, X } from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
 import { DropdownSelect } from "@/components/ui/DropdownSelect";
@@ -7,6 +7,7 @@ import type {
   UserRoleFilter,
   UserStatusFilter,
 } from "@/features/users/types/user";
+import { USER_SORT_OPTIONS, type UserSort } from "@/features/users/utils/userSort";
 
 type UsersToolbarProps = {
   hasActiveFilters: boolean;
@@ -14,10 +15,12 @@ type UsersToolbarProps = {
   itemsOnPage: number;
   onRoleChange: (value: UserRoleFilter) => void;
   onSearchChange: (value: string) => void;
+  onSortChange: (value: UserSort) => void;
   onStatusChange: (value: UserStatusFilter) => void;
   resultCount: number;
   role: UserRoleFilter;
   search: string;
+  sort: UserSort;
   status: UserStatusFilter;
 };
 
@@ -40,10 +43,12 @@ export function UsersToolbar({
   itemsOnPage,
   onRoleChange,
   onSearchChange,
+  onSortChange,
   onStatusChange,
   resultCount,
   role,
   search,
+  sort,
   status,
 }: UsersToolbarProps) {
   return (
@@ -118,6 +123,16 @@ export function UsersToolbar({
             onChange={onStatusChange}
           />
         </div>
+      </div>
+      <div className="mt-2 lg:hidden">
+        <DropdownSelect
+          ariaLabel="Ordenar usuários"
+          value={sort}
+          options={USER_SORT_OPTIONS}
+          icon={ArrowDownUp}
+          className="h-11"
+          onChange={onSortChange}
+        />
       </div>
     </Card>
   );

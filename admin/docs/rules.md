@@ -8,6 +8,10 @@ Commit/push somente quando autorizados pelo usuário; iniciar e controlar o serv
 
 Este documento define os padrões que devem ser considerados antes de qualquer análise, implementação ou refatoração. Toda alteração deve preservar as decisões abaixo e permanecer alinhada aos demais documentos da pasta `docs`.
 
+## Ajustes de API
+
+Siga as [regras comuns do SobraAi](../../docs/rules.md). Quando o painel depender de uma mudança na API, faça e valide o ajuste no backend Go antes de integrar o BFF e a interface.
+
 ## 1. Arquitetura por módulos e features
 
 - Organizar o projeto por domínios de negócio dentro de `features`.

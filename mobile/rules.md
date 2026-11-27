@@ -14,6 +14,10 @@ O ponto de entrada para agentes continua sendo [AGENTS.md](AGENTS.md). Este
 arquivo concentra a política KMP; os comandos estão no
 [harness](docs/test-harness.md) e no [fluxo de validação](docs/ai-workflow.md).
 
+## Ajustes de API
+
+Siga as [regras comuns do SobraAi](../docs/rules.md). Quando Android ou iOS depender de uma mudança na API, faça e valide o ajuste no backend antes da integração nos clientes.
+
 ## Implementação nas duas plataformas
 
 ### Política Git: somente main

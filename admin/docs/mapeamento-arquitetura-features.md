@@ -115,6 +115,10 @@ features/<feature>/
 
 ### `features/users`
 
+O painel abre a lista na ordem padrão da API. A tabela permite ordenar por nome, perfil, acesso, último uso e data de bloqueio pelos cabeçalhos. Nos cards, o seletor oferece as mesmas opções e permite voltar à ordem padrão. A mudança mantém os filtros e retorna à primeira página. A API administrativa ordena o conjunto filtrado antes de paginar, com desempate pelo ID.
+
+No desktop, erros de atualização da lista aparecem no espaço reservado ao rodapé, com uma ação de nova tentativa. Alterações no conteúdo das listagens de usuários e versões não disparam uma nova consulta de paginação quando a janela mantém as mesmas dimensões.
+
 - listagem paginada no servidor com limite responsivo, busca global por nome ou e-mail e filtros globais de perfil e acesso;
 - busca e filtros locais sobre a página carregada, com indicadores globais separados;
 - indicadores globais de total, ativos, bloqueados e administradores, complementados pela contagem Premium filtrada no backend;

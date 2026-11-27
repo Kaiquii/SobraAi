@@ -22,9 +22,15 @@ As regras da raiz e dos projetos afetados são cumulativas e continuam obrigató
 
 Também é possível carregar vários projetos pela raiz: `node scripts/project-rules.mjs --project web --project backend`. O conteúdo dos documentos é carregado novamente em cada execução; arquivo obrigatório ausente, vazio ou ilegível interrompe a carga. Não prosseguir supondo regras nem remover uma entrada para fazer a validação passar. Uma nova regra permanente ou mudança de caminho exige atualizar os documentos e o mapa na mesma tarefa.
 
+Use `node scripts/project-rules.mjs --index --project admin` para localizar os documentos na ordem de leitura. Para carregar o conteúdo completo, execute o comando sem `--index`. O [guia nas regras comuns](docs/rules.md#como-usar-o-contexto-do-harness) aponta os documentos de referência de cada projeto.
+
 Antes da entrega, revisar o diff contra as regras carregadas, registrar o que foi validado e informar lacunas. Carregar documentos ou passar em testes não comprova, por si só, cumprimento de todas as regras. Em caso de conflito real não resolvido pelas instruções atuais do usuário, preservar o trabalho e explicar a divergência antes da ação afetada.
 
 Commit e push continuam permitidos **somente quando autorizados pelo usuário para a tarefa em andamento**, na `main`; não são uma etapa implícita de implementação ou validação. Somente o usuário inicia, reinicia e controla os servidores da aplicação. A interação visual continua exclusivamente no navegador, conforme a seção abaixo.
+
+## Ajustes entre backend e frontend
+
+As [regras comuns](docs/rules.md) são carregadas pelo harness em todos os projetos. Quando uma entrega exigir mudanças na API, implemente e valide o backend antes de integrar o frontend. Novos documentos Markdown globais ficam em `docs/`.
 
 ## Git e preservação
 

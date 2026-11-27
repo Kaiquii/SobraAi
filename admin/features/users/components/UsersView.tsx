@@ -133,9 +133,11 @@ function UsersListSkeleton() {
 export function UsersView() {
   const currentUser = useAuthStore((state) => state.user);
   const actionError = useUsersStore((state) => state.actionError);
+  const appliedSort = useUsersStore((state) => state.appliedSort);
   const changeFilters = useUsersStore((state) => state.changeFilters);
   const changeLimit = useUsersStore((state) => state.changeLimit);
   const changePage = useUsersStore((state) => state.changePage);
+  const changeSort = useUsersStore((state) => state.changeSort);
   const clearFeedback = useUsersStore((state) => state.clearFeedback);
   const deleteUser = useUsersStore((state) => state.deleteUser);
   const error = useUsersStore((state) => state.error);
@@ -154,6 +156,7 @@ export function UsersView() {
   const restoreAccess = useUsersStore((state) => state.restoreAccess);
   const revokeAccess = useUsersStore((state) => state.revokeAccess);
   const revokePremium = useUsersStore((state) => state.revokePremium);
+  const sort = useUsersStore((state) => state.sort);
   const successMessage = useUsersStore((state) => state.successMessage);
   const users = useUsersStore((state) => state.users);
   const [avatarPreview, setAvatarPreview] = useState<AdminUser | null>(null);
@@ -188,6 +191,7 @@ export function UsersView() {
     : null;
   const isInitialLoading = !hasLoaded && isLoading;
   const isMetricsLoading = !hasLoadedMetrics || isLoadingMetrics;
+  const hasStaleUsers = Boolean(error && users.length > 0);
 
   function refreshUsers() {
     clearFeedback();
@@ -288,8 +292,8 @@ export function UsersView() {
         onClose={clearFeedback}
       />
 
-      {error && users.length > 0 && (
-        <Alert tone="error">
+      {hasStaleUsers && (
+        <Alert tone="error" className="lg:hidden">
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
             <span>{error} Os dados exibidos podem estar desatualizados.</span>
             <Button variant="secondary" onClick={refreshUsers}>
@@ -308,8 +312,10 @@ export function UsersView() {
         resultCount={pagination?.total ?? users.length}
         search={searchInput}
         role={filters.role}
+        sort={sort}
         status={filters.status}
         onSearchChange={setSearchInput}
+        onSortChange={changeSort}
         onRoleChange={(role) => changeFilters({ ...filters, role })}
         onStatusChange={(status) => changeFilters({ ...filters, status })}
       />
@@ -348,35 +354,51 @@ export function UsersView() {
           </Card>
         ) : (
           <UsersList
+            appliedSort={appliedSort}
             users={users}
+            sort={sort}
             currentUserEmail={currentUser?.email ?? ""}
             fillsPage={users.length === limit}
             isActionPending={Boolean(pendingAction) || isLoading}
             isRefreshing={hasLoaded && isLoading}
             onAction={(action, user) => setSelectedAction({ action, user })}
             onPreviewAvatar={setAvatarPreview}
+            onSortChange={changeSort}
             onViewUser={setDetailsUser}
           />
         )}
       </div>
 
-      {isInitialLoading ? (
-        <Card
-          aria-hidden="true"
-          className="hidden h-13 animate-pulse rounded-xl bg-slate-200/70 motion-reduce:animate-none dark:bg-slate-800/70 lg:block"
-        />
-      ) : pagination && users.length > 0 ? (
-        <Card className="overflow-hidden rounded-xl p-0 shadow-[0_6px_20px_rgb(15_23_42/0.04)] dark:shadow-[0_8px_24px_rgb(0_0_0/0.18)]">
-          <PaginationControls
-            className="border-t-0"
-            isLoading={isLoading}
-            itemLabel={pagination.total === 1 ? "usuário" : "usuários"}
-            itemsOnPage={users.length}
-            pagination={pagination}
-            onPageChange={changePage}
+      <div className="contents lg:block lg:h-13 lg:shrink-0">
+        {hasStaleUsers ? (
+          <Alert tone="error" className="hidden h-full items-center py-1.5 lg:flex">
+            <div className="flex items-center justify-between gap-3">
+              <span className="min-w-0 truncate" title={error ?? undefined}>
+                {error}
+              </span>
+              <Button variant="secondary" className="h-9 min-h-9 shrink-0" onClick={refreshUsers}>
+                Tentar novamente
+              </Button>
+            </div>
+          </Alert>
+        ) : isInitialLoading ? (
+          <Card
+            aria-hidden="true"
+            className="hidden h-full animate-pulse rounded-xl bg-slate-200/70 motion-reduce:animate-none dark:bg-slate-800/70 lg:block"
           />
-        </Card>
-      ) : null}
+        ) : pagination && users.length > 0 ? (
+          <Card className="overflow-hidden rounded-xl p-0 shadow-[0_6px_20px_rgb(15_23_42/0.04)] dark:shadow-[0_8px_24px_rgb(0_0_0/0.18)]">
+            <PaginationControls
+              className="border-t-0"
+              isLoading={isLoading}
+              itemLabel={pagination.total === 1 ? "usuário" : "usuários"}
+              itemsOnPage={users.length}
+              pagination={pagination}
+              onPageChange={changePage}
+            />
+          </Card>
+        ) : null}
+      </div>
 
       {confirmation && selectedAction && (
         <ConfirmationModal

@@ -39,13 +39,14 @@ func RegisterRoutes(rg *gin.RouterGroup) {
 		protected := authGroup.Group("/")
 		protected.Use(AuthMiddleware())
 		{
-			protected.GET("/users", getUsers)
+			protected.GET("/users", func(c *gin.Context) { listUsers(c, false) })
 		}
 	}
 
 	adminGroup := rg.Group("/admin")
 	adminGroup.Use(AuthMiddleware(), AdminMiddleware())
 	{
+		adminGroup.GET("/users", getUsers)
 		adminGroup.GET("/users/metrics", getUserMetrics)
 		adminGroup.DELETE("/users/:id", deleteUserByAdmin)
 		adminGroup.PATCH("/users/:id/revoke-access", revokeUserAccessByAdmin)
@@ -384,20 +385,37 @@ func login(c *gin.Context) {
 }
 
 func getUsers(c *gin.Context) {
-	params, err := pagination.Parse(c.Request.URL.Query())
+	listUsers(c, true)
+}
+
+func listUsers(c *gin.Context, allowSort bool) {
+	queryParams := c.Request.URL.Query()
+	params, err := pagination.Parse(queryParams)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	filters, err := parseUserFilters(c.Request.URL.Query())
+	filters, err := parseUserFilters(queryParams)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	var sort string
+	if allowSort {
+		sort, err = parseUserSort(queryParams)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	var usersList []User
 	if !params.Enabled {
-		if err := applyUserFilters(database.DB.Model(&User{}), filters).Find(&usersList).Error; err != nil {
+		query := applyUserFilters(database.DB.Model(&User{}), filters)
+		if sort != "" {
+			query = query.Order(sort).Order("id asc")
+		}
+		if err := query.Find(&usersList).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao buscar usuarios"})
 			return
 		}
@@ -410,8 +428,11 @@ func getUsers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao contar usuarios"})
 		return
 	}
-	if err := applyUserFilters(database.DB.Model(&User{}), filters).
-		Order("id asc").
+	query := applyUserFilters(database.DB.Model(&User{}), filters)
+	if sort != "" {
+		query = query.Order(sort)
+	}
+	if err := query.Order("id asc").
 		Limit(params.Limit).
 		Offset(params.Offset).
 		Find(&usersList).Error; err != nil {
@@ -424,6 +445,31 @@ func getUsers(c *gin.Context) {
 		"users":      usersList,
 		"pagination": pagination.NewMetadata(params, total),
 	})
+}
+
+var userSortOrders = map[string]string{
+	"name_asc":         "LOWER(name) ASC",
+	"name_desc":        "LOWER(name) DESC",
+	"role_asc":         "LOWER(role) ASC",
+	"role_desc":        "LOWER(role) DESC",
+	"access_asc":       "access_blocked ASC",
+	"access_desc":      "access_blocked DESC",
+	"last_active_asc":  "last_active_at ASC NULLS LAST",
+	"last_active_desc": "last_active_at DESC NULLS LAST",
+	"blocked_at_asc":   "access_blocked_at ASC NULLS LAST",
+	"blocked_at_desc":  "access_blocked_at DESC NULLS LAST",
+}
+
+func parseUserSort(values url.Values) (string, error) {
+	sort := strings.TrimSpace(values.Get("sort"))
+	if sort == "" {
+		return "", nil
+	}
+	order, ok := userSortOrders[sort]
+	if !ok {
+		return "", fmt.Errorf("ordenação de usuários inválida")
+	}
+	return order, nil
 }
 
 type userFilters struct {

@@ -7,10 +7,10 @@ import { usersApi } from "@/features/users/api/usersApi";
 import type {
   AdminUser,
   AdminUserAction,
-  AdminUserActionResponse,
   UserMetrics,
   UsersListFilters,
 } from "@/features/users/types/user";
+import type { UserSort } from "@/features/users/utils/userSort";
 import { appendAssetCacheKey } from "@/lib/assetUrl";
 import { getApiErrorMessage, getApiErrorStatus } from "@/lib/apiErrors";
 import {
@@ -26,9 +26,11 @@ type PendingUserAction = {
 
 type UsersState = {
   actionError: string | null;
+  appliedSort: UserSort;
   changeFilters: (filters: UsersListFilters) => void;
   changeLimit: (limit: number) => void;
   changePage: (page: number) => void;
+  changeSort: (sort: UserSort) => void;
   clearFeedback: () => void;
   deleteUser: (userId: number) => Promise<boolean>;
   error: string | null;
@@ -44,6 +46,7 @@ type UsersState = {
     page?: number,
     limit?: number,
     filters?: UsersListFilters,
+    sort?: UserSort,
   ) => Promise<void>;
   metrics: UserMetrics | null;
   page: number;
@@ -53,38 +56,18 @@ type UsersState = {
   restoreAccess: (userId: number) => Promise<boolean>;
   revokeAccess: (userId: number) => Promise<boolean>;
   revokePremium: (userId: number) => Promise<boolean>;
+  sort: UserSort;
   successMessage: string | null;
   users: AdminUser[];
 };
 
-type ActionResult = {
-  successMessage: string;
-  user?: AdminUserActionResponse["user"];
-};
-
-function normalizeUser(user: AdminUser, avatarCacheKey?: number): AdminUser {
+function normalizeUser(user: AdminUser, avatarCacheKey: number): AdminUser {
   return {
     ...user,
-    avatar_url: avatarCacheKey
-      ? appendAssetCacheKey(user.avatar_url, avatarCacheKey)
-      : user.avatar_url.trim(),
+    avatar_url: appendAssetCacheKey(user.avatar_url, avatarCacheKey),
     email: user.email.trim(),
     name: user.name.trim(),
   };
-}
-
-function mergeUpdatedUser(
-  currentUser: AdminUser,
-  updatedUser: AdminUserActionResponse["user"],
-): AdminUser {
-  return normalizeUser(
-    {
-      ...currentUser,
-      ...updatedUser,
-      avatar_url: updatedUser.avatar_url ?? currentUser.avatar_url,
-    },
-    updatedUser.avatar_url ? Date.now() : undefined,
-  );
 }
 
 function getActionErrorMessage(error: unknown, action: AdminUserAction) {
@@ -112,7 +95,7 @@ export const useUsersStore = create<UsersState>((set, get) => {
   async function runAction(
     action: AdminUserAction,
     userId: number,
-    operation: () => Promise<ActionResult>,
+    operation: () => Promise<string>,
   ) {
     if (get().pendingAction || get().isLoading) return false;
 
@@ -124,80 +107,13 @@ export const useUsersStore = create<UsersState>((set, get) => {
     });
 
     try {
-      const result = await operation();
-      const currentState = get();
-
-      if (result.user) {
-        const currentUser = currentState.users.find((user) => user.id === userId);
-
-        if (!currentUser) {
-          set({
-            lastUpdatedAt: new Date().toISOString(),
-            pendingAction: null,
-            successMessage: result.successMessage,
-          });
-          return true;
-        }
-
-        const updatedUser = mergeUpdatedUser(currentUser, result.user);
-        const shouldKeepUser =
-          currentState.filters.role === "all" ||
-          currentState.filters.role === updatedUser.role;
-        const users = shouldKeepUser
-          ? currentState.users.map((user) =>
-              user.id === userId ? updatedUser : user,
-            )
-          : currentState.users.filter((user) => user.id !== userId);
-        const pagination =
-          shouldKeepUser || !currentState.pagination
-            ? currentState.pagination
-            : (() => {
-                const total = Math.max(0, currentState.pagination.total - 1);
-                const totalPages = total === 0
-                  ? 0
-                  : Math.ceil(total / currentState.pagination.limit);
-
-                return {
-                  ...currentState.pagination,
-                  has_next: currentState.pagination.page < totalPages,
-                  has_previous: currentState.pagination.page > 1,
-                  total,
-                  total_pages: totalPages,
-                };
-              })();
-
-        set({
-          lastUpdatedAt: new Date().toISOString(),
-          pagination,
-          users,
-        });
-
-        if (action === "promote-premium" || action === "revoke-premium") {
-          await get().loadUserMetrics();
-        }
-
-        set({
-          pendingAction: null,
-          successMessage: result.successMessage,
-        });
-        return true;
-      }
-
-      const currentPage = currentState.pagination?.page ?? currentState.page;
-      const targetPage =
-        action === "delete" && currentState.users.length === 1 && currentPage > 1
-          ? currentPage - 1
-          : currentPage;
-
-      await Promise.all([
-        get().loadUsers(targetPage, currentState.limit, currentState.filters),
-        get().loadUserMetrics(),
-      ]);
+      const successMessage = await operation();
+      await Promise.all([get().loadUsers(), get().loadUserMetrics()]);
 
       set({
         lastUpdatedAt: new Date().toISOString(),
         pendingAction: null,
-        successMessage: result.successMessage,
+        successMessage,
       });
       return true;
     } catch (error) {
@@ -212,6 +128,7 @@ export const useUsersStore = create<UsersState>((set, get) => {
 
   return {
     actionError: null,
+    appliedSort: "",
     error: null,
     filters: { role: "all", search: "", status: "all" },
     hasLoaded: false,
@@ -224,6 +141,7 @@ export const useUsersStore = create<UsersState>((set, get) => {
     page: DEFAULT_PAGE,
     pagination: null,
     pendingAction: null,
+    sort: "",
     successMessage: null,
     users: [],
 
@@ -265,6 +183,13 @@ export const useUsersStore = create<UsersState>((set, get) => {
       void get().loadUsers(page, get().limit, get().filters);
     },
 
+    changeSort: (sort) => {
+      const current = get();
+      if (sort === current.sort || current.pendingAction) return;
+
+      void current.loadUsers(DEFAULT_PAGE, current.limit, current.filters, sort);
+    },
+
     loadUserMetrics: async () => {
       if (get().isLoadingMetrics) return;
 
@@ -296,11 +221,12 @@ export const useUsersStore = create<UsersState>((set, get) => {
       page = get().page,
       limit = get().limit,
       filters = get().filters,
+      sort = get().sort,
     ) => {
       const requestId = ++latestListRequest;
       const normalizedFilters = { ...filters, search: filters.search.trim() };
 
-      set({ error: null, filters: normalizedFilters, isLoading: true });
+      set({ error: null, filters: normalizedFilters, isLoading: true, page, sort });
 
       try {
         const response = await usersApi.getUsers({
@@ -315,15 +241,24 @@ export const useUsersStore = create<UsersState>((set, get) => {
           ...(normalizedFilters.status !== "all"
             ? { status: normalizedFilters.status }
             : {}),
+          ...(sort ? { sort } : {}),
         });
+
+        if (requestId !== latestListRequest) return;
+
+        const lastPage = Math.max(DEFAULT_PAGE, response.pagination?.total_pages ?? page);
+        if (page > lastPage) {
+          await get().loadUsers(lastPage, limit, normalizedFilters, sort);
+          return;
+        }
+
         const avatarCacheKey = Date.now();
         const normalizedUsers = response.users.map((user) =>
           normalizeUser(user, avatarCacheKey),
         );
 
-        if (requestId !== latestListRequest) return;
-
         set({
+          appliedSort: sort,
           hasLoaded: true,
           isLoading: false,
           lastUpdatedAt: new Date().toISOString(),
@@ -349,39 +284,33 @@ export const useUsersStore = create<UsersState>((set, get) => {
     revokeAccess: (userId) =>
       runAction("revoke", userId, async () => {
         await usersApi.revokeAccess(userId);
-        return {
-          successMessage: "Acesso revogado com sucesso.",
-        };
+        return "Acesso revogado com sucesso.";
       }),
 
     restoreAccess: (userId) =>
       runAction("restore", userId, async () => {
         await usersApi.restoreAccess(userId);
-        return {
-          successMessage: "Acesso liberado com sucesso.",
-        };
+        return "Acesso liberado com sucesso.";
       }),
 
     promotePremium: (userId) =>
       runAction("promote-premium", userId, async () => {
         const response = await usersApi.promotePremium(userId);
-        return { successMessage: response.message, user: response.user };
+        return response.message;
       }),
 
     revokePremium: (userId) =>
       runAction("revoke-premium", userId, async () => {
         const response = await usersApi.revokePremium(userId);
-        return { successMessage: response.message, user: response.user };
+        return response.message;
       }),
 
     deleteUser: (userId) =>
       runAction("delete", userId, async () => {
         const response = await usersApi.deleteUser(userId);
-        return {
-          successMessage: response.warning
-            ? "Usuário excluído, mas a foto de perfil não pôde ser removida."
-            : "Usuário excluído permanentemente.",
-        };
+        return response.warning
+          ? "Usuário excluído, mas a foto de perfil não pôde ser removida."
+          : "Usuário excluído permanentemente.";
       }),
   };
 });

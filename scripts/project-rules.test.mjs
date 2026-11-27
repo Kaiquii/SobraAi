@@ -80,6 +80,25 @@ test("o contexto real do harness web inclui o conteúdo das regras gerais e loca
   }
 });
 
+test("todos os projetos carregam as regras globais antes dos documentos locais", () => {
+  for (const project of ["web", "admin", "backend", "mobile"]) {
+    const [agents, globalRules, localAgents] = loadProjectRules([project]);
+    assert.equal(agents.file, "AGENTS.md");
+    assert.equal(globalRules.file, "docs/rules.md");
+    assert.match(globalRules.contents, /Ajustes de backend antes do frontend/);
+    assert.equal(localAgents.file, `${project}/AGENTS.md`);
+  }
+});
+
+test("o índice segue a ordem de leitura e limita os documentos ao escopo", () => {
+  const script = fileURLToPath(new URL("./project-rules.mjs", import.meta.url));
+  const output = execFileSync(process.execPath, [script, "--index", "--project", "admin", "--project", "backend"], {
+    encoding: "utf8", windowsHide: true,
+  });
+  const rules = loadProjectRules(["admin", "backend"]);
+  assert.deepEqual(output.trim().split(/\r?\n/).slice(1), rules.map(({ file }, index) => `${index + 1}. ${file}`));
+});
+
 test("o contexto mobile funciona sem SDK e bloqueia uma regra ausente", { skip: process.platform !== "win32" }, (t) => {
   const { root, manifest, put, save } = fixture(t);
   manifest.projects.mobile = ["mobile/rules.md"];

@@ -1,4 +1,4 @@
-import { Camera, Clock3, Eye, ShieldCheck } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowUp, Camera, Clock3, Eye, ShieldCheck } from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -15,16 +15,20 @@ import {
   formatUserBlockedAt,
   formatUserLastActiveAt,
 } from "@/features/users/utils/userFormatters";
+import { USER_SORT_COLUMNS, type UserSort } from "@/features/users/utils/userSort";
 import { cn } from "@/lib/utils";
 
 type UsersListProps = {
+  appliedSort: UserSort;
   currentUserEmail: string;
   fillsPage?: boolean;
   isActionPending: boolean;
   isRefreshing?: boolean;
   onAction: (action: AdminUserAction, user: AdminUser) => void;
   onPreviewAvatar: (user: AdminUser) => void;
+  onSortChange: (sort: UserSort) => void;
   onViewUser: (user: AdminUser) => void;
+  sort: UserSort;
   users: AdminUser[];
 };
 
@@ -65,13 +69,16 @@ function AvatarControl({
 }
 
 export function UsersList({
+  appliedSort,
   currentUserEmail,
   fillsPage = false,
   isActionPending,
   isRefreshing = false,
   onAction,
   onPreviewAvatar,
+  onSortChange,
   onViewUser,
+  sort,
   users,
 }: UsersListProps) {
   return (
@@ -98,22 +105,41 @@ export function UsersList({
               className="bg-slate-100 dark:bg-slate-800"
             >
               <tr className="border-b border-slate-200 dark:border-slate-700">
-                <th className="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Usuário / e-mail
-                </th>
-                <th className="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Perfil
-                </th>
-                <th className="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Acesso
-                </th>
-                <th className="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Último uso
-                </th>
-                <th className="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Bloqueio
-                </th>
-                <th className="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                {USER_SORT_COLUMNS.map(({ label, first, second, firstDirection }) => {
+                  const secondDirection = firstDirection === "ascending" ? "descending" : "ascending";
+                  const direction = appliedSort === first.value
+                    ? firstDirection
+                    : appliedSort === second.value ? secondDirection : undefined;
+                  const SortIcon = direction === "ascending" ? ArrowUp
+                    : direction === "descending" ? ArrowDown : ArrowDownUp;
+                  const nextOption = sort === first.value ? second : first;
+
+                  return (
+                    <th
+                      key={label}
+                      scope="col"
+                      aria-sort={direction}
+                      className="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wider"
+                    >
+                      <button
+                        type="button"
+                        title={`Ordenar por ${nextOption.label}`}
+                        aria-label={`${label}. Ordenar por ${nextOption.label}`}
+                        className={cn(
+                          "inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-sm uppercase outline-none hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:text-white",
+                          direction
+                            ? "text-emerald-700 dark:text-emerald-300"
+                            : "text-slate-500 dark:text-slate-400",
+                        )}
+                        onClick={() => onSortChange(nextOption.value)}
+                      >
+                        {label}
+                        <SortIcon className="size-3 shrink-0" aria-hidden="true" />
+                      </button>
+                    </th>
+                  );
+                })}
+                <th scope="col" className="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Ações
                 </th>
               </tr>
